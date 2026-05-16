@@ -39,12 +39,17 @@ def sync_push(
             # Identify which group the expense belongs to
             # Ensure the current user is indeed a member of that group before writing
             db_group = crud.get_group(db, expense_in.group_id)
-            if not db_group or current_user not in db_group.members:
+            if not db_group:
+                print(f"SYNC_PUSH_DEBUG: Group {expense_in.group_id} not found in DB!")
+                continue
+            if current_user not in db_group.members:
+                print(f"SYNC_PUSH_DEBUG: User {current_user.id} not in group members {[m.id for m in db_group.members]}!")
                 continue
                 
             crud.create_expense(db, group_id=expense_in.group_id, expense_in=expense_in)
             successful_expenses.append(expense_in.id)
         except Exception as e:
+            print(f"SYNC_PUSH_DEBUG: Exception caught during create_expense: {e}")
             continue
             
     return schemas.SyncPushResponse(
