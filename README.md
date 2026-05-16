@@ -131,7 +131,7 @@ When a bill is added, it is divided among the participating friends. The splits 
 | **Owed Amount** | Number (Decimal) | The exact dollar amount that this person owes. | `$30.00` |
 
 <details>
-<summary>🗄️ View Technical SQL Database Schema</summary>
+<summary>View Technical SQL Database Schema</summary>
 
 ```sql
 -- 1. Users: Profile mapping
@@ -187,17 +187,6 @@ CREATE TABLE expense_splits (
 ```
 
 </details>
-
-
----
-
-## 🔒 Security Blueprint
-
-Following secure coding guidelines, the application incorporates several security measures:
-- **Identity & Session Isolation**: Google ID tokens are sent from the frontend and verified on the backend using Google's official authentication libraries. Once verified, a stateless, short-lived backend session **JWT Token** is issued.
-- **JWT Hardening**: The secret key is loaded from the environment. In dev environments, it automatically falls back to a securely generated, instance-isolated random hex string. All token verifications enforce strict algorithm matching (`HS256`) and validate standard expiry (`exp`) claims to prevent bypasses.
-- **Strict CORS & Header Protection**: Cross-Origin Resource Sharing is locked down to trusted domains. Standard headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) and a strict Content Security Policy (CSP) prevent XSS, Clickjacking, and MIM attacks.
-- **Database Protection**: SQL Injection is systematically blocked by using **SQLAlchemy ORM** for all data queries. User input is validated at the API layer using **Pydantic V2 schemas** before entering SQL queries.
 
 ---
 
