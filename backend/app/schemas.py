@@ -59,6 +59,7 @@ class ExpenseBase(BaseModel):
 
 class ExpenseCreate(ExpenseBase):
     id: Optional[str] = None  # Client-provided UUID for offline sync support
+    group_id: Optional[str] = None
     paid_by_id: str
     splits: List[ExpenseSplitCreate]
 

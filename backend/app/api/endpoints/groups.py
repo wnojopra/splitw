@@ -56,8 +56,6 @@ def get_group_details(
 @router.post("/{group_id}/members", response_model=schemas.UserResponse)
 def add_group_member(
     group_id: str,
-    invite_request: schemas.GoogleAuthRequest,  # Reuse class or send payload with email. Let's use simple body/query.
-    # Wait! Let's design email request. To keep it simple and type-safe, let's just accept a dictionary or query param.
     email: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
