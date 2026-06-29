@@ -214,8 +214,8 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
     # Handle idempotent creates for offline synchronization sync loops
     existing_expense = db.query(models.Expense).filter(models.Expense.id == expense_id).first()
     if existing_expense:
-        # If it was soft deleted, restore it and update
-        existing_expense.is_deleted = False
+        # Update deletion status and other fields
+        existing_expense.is_deleted = expense_in.is_deleted
         existing_expense.description = expense_in.description
         existing_expense.amount = expense_in.amount
         existing_expense.paid_by_id = paid_by_id
@@ -243,7 +243,8 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
         amount=expense_in.amount,
         currency=expense_in.currency,
         date=expense_in.date,
-        is_settlement=expense_in.is_settlement
+        is_settlement=expense_in.is_settlement,
+        is_deleted=expense_in.is_deleted
     )
     db.add(db_expense)
     
