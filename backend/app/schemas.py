@@ -62,6 +62,8 @@ class ExpenseCreate(ExpenseBase):
     group_id: Optional[str] = None
     paid_by_id: str
     splits: List[ExpenseSplitCreate]
+    is_deleted: bool = False
+
 
 class ExpenseUpdate(BaseModel):
     description: Optional[Annotated[str, StringConstraints(min_length=1, max_length=255)]] = None

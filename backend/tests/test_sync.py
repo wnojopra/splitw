@@ -257,3 +257,219 @@ def test_sync_push_unauthorized_group_and_expense(client, auth_headers1, auth_he
     expense = db.query(Expense).filter(Expense.id == "hacked-expense-uuid").first()
     assert expense is None
 
+
+def test_sync_push_expense_paid_by_other_member(client, auth_headers1, test_user1, test_user2, db):
+    """
+    Tests that when User 1 (Alice) pushes an expense paid by User 2 (Charlie),
+    it correctly saves all splits.
+    """
+    import uuid
+    from datetime import datetime
+    from app.models import Group, Expense
+    from fastapi import status
+
+    group_uuid = str(uuid.uuid4())
+    expense_uuid = str(uuid.uuid4())
+
+    # 1. Alice pushes a group containing Charlie
+    sync_payload = {
+        "groups": [
+            {
+                "id": group_uuid,
+                "name": "Alice-Charlie",
+                "member_emails": [test_user1.email, test_user2.email]
+            }
+        ],
+        "expenses": []
+    }
+    response = client.post(
+        "/api/v1/sync/push",
+        json=sync_payload,
+        headers=auth_headers1
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert group_uuid in response.json()["successful_groups"]
+
+    # 2. Alice pushes an expense paid by Charlie, split equally
+    sync_payload2 = {
+        "groups": [],
+        "expenses": [
+            {
+                "id": expense_uuid,
+                "group_id": group_uuid,
+                "description": "Dinner",
+                "amount": 100.00,
+                "paid_by_id": test_user2.id, # Paid by Charlie
+                "date": datetime.utcnow().isoformat(),
+                "splits": [
+                    {"user_id": test_user1.id, "owed_amount": 50.00},
+                    {"user_id": test_user2.id, "owed_amount": 50.00}
+                ]
+            }
+        ]
+    }
+    response = client.post(
+        "/api/v1/sync/push",
+        json=sync_payload2,
+        headers=auth_headers1
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert expense_uuid in response.json()["successful_expenses"]
+
+    # 3. Verify DB has both splits
+    expense = db.query(Expense).filter(Expense.id == expense_uuid).first()
+    assert expense is not None
+    assert expense.paid_by_id == test_user2.id
+    assert len(expense.splits) == 2
+    
+    split_users = {s.user_id for s in expense.splits}
+    assert test_user1.id in split_users
+    assert test_user2.id in split_users
+
+
+def test_sync_invited_member_adds_expense(client, auth_headers1, auth_headers2, test_user1, test_user2, db):
+    """
+    Tests that when the invited user (Charlie/user2) pulls the group,
+    adds an expense, and pushes it, it correctly saves all splits.
+    """
+    import uuid
+    from datetime import datetime
+    from app.models import Group, Expense
+    from fastapi import status
+
+    group_uuid = str(uuid.uuid4())
+    expense_uuid = str(uuid.uuid4())
+
+    # 1. Alice (user1) pushes the group containing Charlie (user2)
+    sync_payload = {
+        "groups": [
+            {
+                "id": group_uuid,
+                "name": "Alice-Charlie",
+                "member_emails": [test_user1.email, test_user2.email]
+            }
+        ],
+        "expenses": []
+    }
+    response = client.post(
+        "/api/v1/sync/push",
+        json=sync_payload,
+        headers=auth_headers1
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    # 2. Charlie (user2) pushes the expense
+    sync_payload2 = {
+        "groups": [],
+        "expenses": [
+            {
+                "id": expense_uuid,
+                "group_id": group_uuid,
+                "description": "Dinner",
+                "amount": 100.00,
+                "paid_by_id": test_user2.id, # Paid by Charlie
+                "date": datetime.utcnow().isoformat(),
+                "splits": [
+                    {"user_id": test_user1.id, "owed_amount": 50.00},
+                    {"user_id": test_user2.id, "owed_amount": 50.00}
+                ]
+            }
+        ]
+    }
+    response = client.post(
+        "/api/v1/sync/push",
+        json=sync_payload2,
+        headers=auth_headers2 # Pushed by Charlie!
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert expense_uuid in response.json()["successful_expenses"]
+
+    # 3. Verify DB has both splits
+    expense = db.query(Expense).filter(Expense.id == expense_uuid).first()
+    assert expense is not None
+    assert len(expense.splits) == 2
+
+
+def test_sync_push_delete_expense(client, auth_headers1, test_user1, test_user2, db):
+    """
+    Tests that pushing an expense with is_deleted=True correctly soft-deletes it on the server.
+    """
+    import uuid
+    from datetime import datetime
+    from app.models import Group, Expense
+    from fastapi import status
+
+    group_uuid = str(uuid.uuid4())
+    expense_uuid = str(uuid.uuid4())
+
+    # 1. Create group
+    sync_payload = {
+        "groups": [
+            {
+                "id": group_uuid,
+                "name": "Test Group",
+                "member_emails": [test_user1.email, test_user2.email]
+            }
+        ],
+        "expenses": []
+    }
+    response = client.post("/api/v1/sync/push", json=sync_payload, headers=auth_headers1)
+    assert response.status_code == status.HTTP_200_OK
+
+    # 2. Push expense
+    sync_payload2 = {
+        "groups": [],
+        "expenses": [
+            {
+                "id": expense_uuid,
+                "group_id": group_uuid,
+                "description": "To Be Deleted",
+                "amount": 10.00,
+                "paid_by_id": test_user1.id,
+                "date": datetime.utcnow().isoformat(),
+                "splits": [
+                    {"user_id": test_user1.id, "owed_amount": 5.00},
+                    {"user_id": test_user2.id, "owed_amount": 5.00}
+                ]
+            }
+        ]
+    }
+    response = client.post("/api/v1/sync/push", json=sync_payload2, headers=auth_headers1)
+    assert response.status_code == status.HTTP_200_OK
+    assert expense_uuid in response.json()["successful_expenses"]
+
+    # Verify it exists and is NOT deleted
+    expense = db.query(Expense).filter(Expense.id == expense_uuid).first()
+    assert expense is not None
+    assert expense.is_deleted is False
+
+    # 3. Push same expense with is_deleted=True
+    sync_payload3 = {
+        "groups": [],
+        "expenses": [
+            {
+                "id": expense_uuid,
+                "group_id": group_uuid,
+                "description": "To Be Deleted",
+                "amount": 10.00,
+                "paid_by_id": test_user1.id,
+                "date": datetime.utcnow().isoformat(),
+                "is_deleted": True, # DELETED!
+                "splits": [
+                    {"user_id": test_user1.id, "owed_amount": 5.00},
+                    {"user_id": test_user2.id, "owed_amount": 5.00}
+                ]
+            }
+        ]
+    }
+    response = client.post("/api/v1/sync/push", json=sync_payload3, headers=auth_headers1)
+    assert response.status_code == status.HTTP_200_OK
+    assert expense_uuid in response.json()["successful_expenses"]
+
+    # Verify it is now deleted in the DB
+    db.refresh(expense)
+    assert expense.is_deleted is True
+
+
+
+
