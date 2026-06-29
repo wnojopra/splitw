@@ -235,7 +235,7 @@ To run `splitw` locally, you will need to start both the backend FastAPI server 
 
 ## 🛠️ Development & Testing Workflows
 
-`splitw` is designed to be exceptionally easy to develop and test locally, even without setting up cloud credentials or external services.
+`splitw` is designed to be tested locally, even without setting up cloud credentials or external services.
 
 ### 1. Zero-Config Local Mock Authentication
 By default, if no `GOOGLE_CLIENT_ID` is set in your backend environment/`.env` file, the system operates in **Mock Auth Mode**. 
