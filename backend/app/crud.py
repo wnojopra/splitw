@@ -52,6 +52,30 @@ def create_group(db: Session, group_in: schemas.GroupCreate, owner: models.User)
     # Ensure group ID is unique
     existing_group = get_group(db, group_id)
     if existing_group:
+        # Update existing group's name and description if they changed
+        existing_group.name = group_in.name
+        if group_in.description is not None:
+            existing_group.description = group_in.description
+        
+        # Add new members
+        existing_member_emails = {m.email.lower() for m in existing_group.members}
+        for email in group_in.member_emails:
+            if email.lower() in existing_member_emails:
+                continue
+            member = get_user_by_email(db, email)
+            if not member:
+                # Create a placeholder user so they are in the group when they sign up
+                member = models.User(
+                    google_id=f"placeholder-{email}",
+                    email=email,
+                    display_name=email.split("@")[0].title()
+                )
+                db.add(member)
+            existing_group.members.append(member)
+            
+        existing_group.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing_group)
         return existing_group
 
     db_group = models.Group(
@@ -67,8 +91,15 @@ def create_group(db: Session, group_in: schemas.GroupCreate, owner: models.User)
         if email == owner.email:
             continue
         member = get_user_by_email(db, email)
-        if member:
-            db_group.members.append(member)
+        if not member:
+            # Create a placeholder user
+            member = models.User(
+                google_id=f"placeholder-{email}",
+                email=email,
+                display_name=email.split("@")[0].title()
+            )
+            db.add(member)
+        db_group.members.append(member)
             
     db.add(db_group)
     db.commit()
@@ -100,7 +131,7 @@ def get_group_expenses(db: Session, group_id: str) -> List[models.Expense]:
         models.Expense.is_deleted == False
     ).order_by(models.Expense.date.desc()).all()
 
-def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate) -> models.Expense:
+def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate, heal_membership: bool = False) -> models.Expense:
     # Verify that the sum of splits equals the total amount
     total_split_amount = sum(Decimal(str(split.owed_amount)) for split in expense_in.splits)
     if abs(total_split_amount - Decimal(str(expense_in.amount))) > Decimal("0.01"):
@@ -109,24 +140,66 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
             detail=f"The sum of splits ({total_split_amount}) does not equal the total expense amount ({expense_in.amount})"
         )
         
+    # Helper to resolve user ID (handles dev-google-id-email placeholders)
+    def resolve_id(id_str: str) -> str:
+        if id_str.startswith("dev-google-id-"):
+            email = id_str.replace("dev-google-id-", "")
+            user = get_user_by_email(db, email)
+            if not user:
+                # Create placeholder user if they don't exist
+                user = models.User(
+                    google_id=id_str,
+                    email=email,
+                    display_name=email.split("@")[0].title()
+                )
+                db.add(user)
+                db.flush() # Flush to get the ID
+            return user.id
+        return id_str
+
+    # Resolve paid_by_id and split user_ids
+    paid_by_id = resolve_id(expense_in.paid_by_id)
+    resolved_splits = []
+    for split in expense_in.splits:
+        resolved_splits.append({
+            "user_id": resolve_id(split.user_id),
+            "owed_amount": split.owed_amount
+        })
+
     # Verify group membership for creator and all split members
     db_group = get_group(db, group_id)
     if not db_group:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
         
+    # Ensure all resolved users are in the group
     member_ids = {user.id for user in db_group.members}
-    if expense_in.paid_by_id not in member_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Payer must be a member of the group"
-        )
-        
-    for split in expense_in.splits:
-        if split.user_id not in member_ids:
+    
+    # If payer is not in group, add them if healing, else raise error
+    if paid_by_id not in member_ids:
+        if heal_membership:
+            payer_user = get_user(db, paid_by_id)
+            if payer_user:
+                db_group.members.append(payer_user)
+                member_ids.add(paid_by_id)
+        else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"User {split.user_id} involved in split is not a member of the group"
+                detail="Payer must be a member of the group"
             )
+            
+    # If any split user is not in group, add them if healing, else raise error
+    for s in resolved_splits:
+        if s["user_id"] not in member_ids:
+            if heal_membership:
+                split_user = get_user(db, s["user_id"])
+                if split_user:
+                    db_group.members.append(split_user)
+                    member_ids.add(s["user_id"])
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"User {s['user_id']} involved in split is not a member of the group"
+                )
 
     # Support client-provided UUID for offline sync
     expense_id = expense_in.id if expense_in.id else models.generate_uuid_str()
@@ -138,17 +211,17 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
         existing_expense.is_deleted = False
         existing_expense.description = expense_in.description
         existing_expense.amount = expense_in.amount
-        existing_expense.paid_by_id = expense_in.paid_by_id
+        existing_expense.paid_by_id = paid_by_id
         existing_expense.date = expense_in.date
         existing_expense.is_settlement = expense_in.is_settlement
         existing_expense.updated_at = datetime.utcnow()
         # Clear and rewrite splits
         db.query(models.ExpenseSplit).filter(models.ExpenseSplit.expense_id == expense_id).delete()
-        for split in expense_in.splits:
+        for s in resolved_splits:
             db_split = models.ExpenseSplit(
                 expense_id=expense_id,
-                user_id=split.user_id,
-                owed_amount=split.owed_amount
+                user_id=s["user_id"],
+                owed_amount=s["owed_amount"]
             )
             db.add(db_split)
         db.commit()
@@ -158,7 +231,7 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
     db_expense = models.Expense(
         id=expense_id,
         group_id=group_id,
-        paid_by_id=expense_in.paid_by_id,
+        paid_by_id=paid_by_id,
         description=expense_in.description,
         amount=expense_in.amount,
         currency=expense_in.currency,
@@ -168,11 +241,11 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
     db.add(db_expense)
     
     # Create expense splits
-    for split in expense_in.splits:
+    for s in resolved_splits:
         db_split = models.ExpenseSplit(
             expense_id=expense_id,
-            user_id=split.user_id,
-            owed_amount=split.owed_amount
+            user_id=s["user_id"],
+            owed_amount=s["owed_amount"]
         )
         db.add(db_split)
         
