@@ -153,7 +153,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             <WalletIcon size={36} style={{ color: '#ffffff' }} />
           </div>
           <h2>splitw<span>.</span></h2>
-          <p>Premium Offline-First Expense Sharing</p>
+          <p>Expense Sharing for my friends</p>
           <p>By Willy Nojopranoto</p>
         </div>
 
