@@ -37,16 +37,12 @@ def sync_push(
     for expense_in in payload.expenses:
         try:
             # Identify which group the expense belongs to
-            # Ensure the current user is indeed a member of that group before writing
             db_group = crud.get_group(db, expense_in.group_id)
             if not db_group:
                 print(f"SYNC_PUSH_DEBUG: Group {expense_in.group_id} not found in DB!")
                 continue
-            if current_user not in db_group.members:
-                print(f"SYNC_PUSH_DEBUG: User {current_user.id} not in group members {[m.id for m in db_group.members]}!")
-                continue
                 
-            crud.create_expense(db, group_id=expense_in.group_id, expense_in=expense_in)
+            crud.create_expense(db, group_id=expense_in.group_id, expense_in=expense_in, heal_membership=True)
             successful_expenses.append(expense_in.id)
         except Exception as e:
             print(f"SYNC_PUSH_DEBUG: Exception caught during create_expense: {e}")
@@ -56,6 +52,7 @@ def sync_push(
         successful_groups=successful_groups,
         successful_expenses=successful_expenses
     )
+
 
 @router.get("/pull", response_model=schemas.SyncPullResponse)
 def sync_pull(
