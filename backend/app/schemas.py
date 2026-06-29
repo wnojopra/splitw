@@ -112,6 +112,7 @@ class DebtItem(BaseModel):
     from_user_id: str
     to_user_id: str
     amount: Decimal
+    currency: str
 
 class GroupBalancesResponse(BaseModel):
     group_id: str

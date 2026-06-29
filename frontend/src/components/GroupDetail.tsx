@@ -4,7 +4,7 @@ import { db, type LocalGroup, type LocalExpense } from '../db';
 import { calculateLocalBalances } from '../services/balances';
 import { syncAll } from '../services/sync';
 import { PlusIcon, TrashIcon, UsersIcon, ArrowRightIcon, InfoIcon, EditIcon } from './Icons';
-import { ExpenseModal } from './ExpenseModal';
+import { ExpenseModal, SUPPORTED_CURRENCIES } from './ExpenseModal';
 
 interface GroupDetailProps {
   group: LocalGroup;
@@ -21,7 +21,7 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
 
   // Expense Modal triggers
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [settlementPrefill, setSettlementPrefill] = useState<{ from_user_id: string; to_user_id: string; amount: string } | undefined>(undefined);
+  const [settlementPrefill, setSettlementPrefill] = useState<{ from_user_id: string; to_user_id: string; amount: string; currency: string } | undefined>(undefined);
   const [expenseToEdit, setExpenseToEdit] = useState<LocalExpense | undefined>(undefined);
 
   const openEditExpense = (expense: LocalExpense) => {
@@ -113,8 +113,8 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
     }
   };
 
-  const openSettlement = (fromId: string, toId: string, amount: string) => {
-    setSettlementPrefill({ from_user_id: fromId, to_user_id: toId, amount });
+  const openSettlement = (fromId: string, toId: string, amount: string, currency: string) => {
+    setSettlementPrefill({ from_user_id: fromId, to_user_id: toId, amount, currency });
     setIsExpenseModalOpen(true);
   };
 
@@ -129,6 +129,11 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
     if (id === currentUser.id) return 'You';
     const member = group.members.find(m => m.id === id);
     return member ? member.display_name : 'Unknown Member';
+  };
+
+  // Helper: Get currency symbol
+  const getCurrencySymbol = (code?: string) => {
+    return SUPPORTED_CURRENCIES.find(c => c.code === code)?.symbol || '€';
   };
 
   return (
@@ -210,7 +215,9 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
                       </div>
 
                       <div className="expense-item-right">
-                        <span className="expense-amount">${parseFloat(expense.amount).toFixed(2)}</span>
+                        <span className="expense-amount">
+                          {getCurrencySymbol(expense.currency)}{parseFloat(expense.amount).toFixed(2)}
+                        </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <span className="expense-payer-label">
                             {expense.is_settlement ? 'Settlement payment' : `${expense.splits.length} split participant(s)`}
@@ -245,13 +252,10 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
                 <h4 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <UsersIcon size={18} /> Net Group Balances
                 </h4>
-                <div className="balances-list">
-                  {group.members.map((member) => {
-                    const balAmount = parseFloat(balances[member.id] || '0.00');
-                    const isPositive = balAmount > 0.009;
-                    const isNegative = balAmount < -0.009;
-                    
-                    return (
+                
+                {Object.keys(balances).length === 0 ? (
+                  <div className="balances-list">
+                    {group.members.map((member) => (
                       <div key={member.id} className="balance-member-card">
                         <div className="balance-member-left">
                           <div className="group-members-avatar-item" style={{ width: '32px', height: '32px', fontSize: '12px' }}>
@@ -262,14 +266,47 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{member.email}</span>
                           </div>
                         </div>
+                        <span className="balance-member-amount">€0.00</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  Object.entries(balances).map(([curr, currBalances]) => {
+                    const symbol = getCurrencySymbol(curr);
+                    return (
+                      <div key={curr} style={{ marginBottom: '1.5rem' }}>
+                        <h5 style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Balances in {curr} ({symbol})
+                        </h5>
+                        <div className="balances-list">
+                          {group.members.map((member) => {
+                            const balAmount = parseFloat(currBalances[member.id] || '0.00');
+                            const isPositive = balAmount > 0.009;
+                            const isNegative = balAmount < -0.009;
+                            
+                            return (
+                              <div key={member.id} className="balance-member-card">
+                                <div className="balance-member-left">
+                                  <div className="group-members-avatar-item" style={{ width: '32px', height: '32px', fontSize: '12px' }}>
+                                    {member.display_name.charAt(0)}
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ fontWeight: 600 }}>{member.id === currentUser.id ? 'You' : member.display_name}</span>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{member.email}</span>
+                                  </div>
+                                </div>
 
-                        <span className={`balance-member-amount ${isPositive ? 'positive' : isNegative ? 'negative' : ''}`}>
-                          {isPositive ? `+ $${balAmount.toFixed(2)}` : isNegative ? `- $${Math.abs(balAmount).toFixed(2)}` : '$0.00'}
-                        </span>
+                                <span className={`balance-member-amount ${isPositive ? 'positive' : isNegative ? 'negative' : ''}`}>
+                                  {isPositive ? `+ ${symbol}${balAmount.toFixed(2)}` : isNegative ? `- ${symbol}${Math.abs(balAmount).toFixed(2)}` : `${symbol}0.00`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
-                  })}
-                </div>
+                  })
+                )}
               </div>
 
               {/* Simplified Debt Settlement visual recommendations */}
@@ -295,12 +332,12 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
 
                         <div className="debt-action-block">
                           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', color: 'var(--accent)' }}>
-                            ${parseFloat(debt.amount).toFixed(2)}
+                            {getCurrencySymbol(debt.currency)}{parseFloat(debt.amount).toFixed(2)}
                           </span>
                           <button
                             className="btn btn-success"
                             style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}
-                            onClick={() => openSettlement(debt.from_user_id, debt.to_user_id, debt.amount)}
+                            onClick={() => openSettlement(debt.from_user_id, debt.to_user_id, debt.amount, debt.currency)}
                           >
                             Settle Up
                           </button>

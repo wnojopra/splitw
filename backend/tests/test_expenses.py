@@ -155,10 +155,10 @@ def test_get_group_balances_and_simplification(client, auth_headers1, test_group
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     
-    # Verify net balances
-    assert float(data["balances"][test_user1.id]) == 50.0
-    assert float(data["balances"][test_user2.id]) == -10.0
-    assert float(data["balances"][test_user3.id]) == -40.0
+    # Verify net balances (nested by USD)
+    assert float(data["balances"]["USD"][test_user1.id]) == 50.0
+    assert float(data["balances"]["USD"][test_user2.id]) == -10.0
+    assert float(data["balances"]["USD"][test_user3.id]) == -40.0
     
     # Verify simplified debts
     debts = data["simplified_debts"]
@@ -168,8 +168,94 @@ def test_get_group_balances_and_simplification(client, auth_headers1, test_group
     debt_u3_to_u1 = next(d for d in debts if d["from_user_id"] == test_user3.id)
     assert debt_u3_to_u1["to_user_id"] == test_user1.id
     assert float(debt_u3_to_u1["amount"]) == 40.0
+    assert debt_u3_to_u1["currency"] == "USD"
     
     # Confirm User2 pays User1 $10
     debt_u2_to_u1 = next(d for d in debts if d["from_user_id"] == test_user2.id)
     assert debt_u2_to_u1["to_user_id"] == test_user1.id
     assert float(debt_u2_to_u1["amount"]) == 10.0
+    assert debt_u2_to_u1["currency"] == "USD"
+
+
+def test_get_group_balances_multi_currency(client, auth_headers1, test_group, test_user1, test_user2, test_user3):
+    """
+    Scenario:
+    1. User1 pays $90 USD for dinner. Split equally ($30 USD each).
+    2. User2 pays €60 EUR for museum. Split equally (€20 EUR each).
+    
+    Net Balances expected:
+    - USD:
+      - User1: +$60 USD
+      - User2: -$30 USD
+      - User3: -$30 USD
+    - EUR:
+      - User1: -€20 EUR
+      - User2: +€40 EUR
+      - User3: -€20 EUR
+    """
+    # 1. User1 adds USD dinner expense
+    client.post(
+        f"/api/v1/groups/{test_group.id}/expenses",
+        headers=auth_headers1,
+        json={
+            "description": "Dinner USD",
+            "amount": 90.00,
+            "currency": "USD",
+            "date": datetime.utcnow().isoformat(),
+            "paid_by_id": test_user1.id,
+            "splits": [
+                {"user_id": test_user1.id, "owed_amount": 30.00},
+                {"user_id": test_user2.id, "owed_amount": 30.00},
+                {"user_id": test_user3.id, "owed_amount": 30.00}
+            ]
+        }
+    )
+    
+    # 2. User2 adds EUR museum expense
+    client.post(
+        f"/api/v1/groups/{test_group.id}/expenses",
+        headers=auth_headers1,
+        json={
+            "description": "Museum EUR",
+            "amount": 60.00,
+            "currency": "EUR",
+            "date": datetime.utcnow().isoformat(),
+            "paid_by_id": test_user2.id,
+            "splits": [
+                {"user_id": test_user1.id, "owed_amount": 20.00},
+                {"user_id": test_user2.id, "owed_amount": 20.00},
+                {"user_id": test_user3.id, "owed_amount": 20.00}
+            ]
+        }
+    )
+    
+    # 3. Fetch balances
+    response = client.get(f"/api/v1/groups/{test_group.id}/balances", headers=auth_headers1)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    
+    # Verify USD balances
+    assert float(data["balances"]["USD"][test_user1.id]) == 60.0
+    assert float(data["balances"]["USD"][test_user2.id]) == -30.0
+    assert float(data["balances"]["USD"][test_user3.id]) == -30.0
+    
+    # Verify EUR balances
+    assert float(data["balances"]["EUR"][test_user1.id]) == -20.0
+    assert float(data["balances"]["EUR"][test_user2.id]) == 40.0
+    assert float(data["balances"]["EUR"][test_user3.id]) == -20.0
+    
+    # Verify simplified debts
+    debts = data["simplified_debts"]
+    assert len(debts) == 4 # 2 in USD, 2 in EUR
+    
+    # USD Debts: U2 -> U1 ($30), U3 -> U1 ($30)
+    usd_debts = [d for d in debts if d["currency"] == "USD"]
+    assert len(usd_debts) == 2
+    assert float(next(d for d in usd_debts if d["from_user_id"] == test_user2.id)["amount"]) == 30.0
+    assert float(next(d for d in usd_debts if d["from_user_id"] == test_user3.id)["amount"]) == 30.0
+    
+    # EUR Debts: U1 -> U2 (€20), U3 -> U2 (€20)
+    eur_debts = [d for d in debts if d["currency"] == "EUR"]
+    assert len(eur_debts) == 2
+    assert float(next(d for d in eur_debts if d["from_user_id"] == test_user1.id)["amount"]) == 20.0
+    assert float(next(d for d in eur_debts if d["from_user_id"] == test_user3.id)["amount"]) == 20.0
