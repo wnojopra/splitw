@@ -192,21 +192,63 @@ CREATE TABLE expense_splits (
 
 ## 🚀 Local Quickstart
 
-### Backend Setup
+To run `splitw` locally, you will need to start both the backend FastAPI server and the frontend Vite development server.
 
-1. Ensure you have Python 3.13+ installed.
-2. Navigate to the backend directory and set up the virtual environment:
+### 1. Backend Setup
+
+1. **Prerequisites**: Ensure you have Python 3.13+ installed.
+2. **Navigate & Virtual Env**: Go to the backend directory and set up a virtual environment:
    ```bash
    cd backend
    python3 -m venv venv
    source venv/bin/activate
    ```
-3. Install all dependencies:
+3. **Install Dependencies**:
    ```bash
    pip install -r requirements.txt --index-url https://pypi.org/simple
    ```
-4. Start the application server:
+4. **Start the Server**:
    ```bash
    uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
    ```
-5. Open `http://127.0.0.1:8000/docs` in your browser to view the interactive API Swagger documentation!
+5. **API Documentation**: Open `http://127.0.0.1:8000/docs` in your browser to view the interactive Swagger API documentation.
+6. **Running Tests**: You can run the backend test suite using `pytest` from the `backend` directory:
+   ```bash
+   pytest
+   ```
+
+### 2. Frontend Setup
+
+1. **Prerequisites**: Ensure you have Node.js (v18+) and `npm` installed.
+2. **Navigate & Install**: Go to the frontend directory and install dependencies:
+   ```bash
+   cd frontend
+   npm install
+   ```
+3. **Start Development Server**:
+   ```bash
+   npm run dev
+   ```
+4. **Access the App**: Open `http://localhost:5173` in your browser to interact with the frontend.
+
+---
+
+## 🛠️ Development & Testing Workflows
+
+`splitw` is designed to be exceptionally easy to develop and test locally, even without setting up cloud credentials or external services.
+
+### 1. Zero-Config Local Mock Authentication
+By default, if no `GOOGLE_CLIENT_ID` is set in your backend environment/`.env` file, the system operates in **Mock Auth Mode**. 
+- On the frontend login screen, you can click on any of the **Demo Accounts** (Alice, Bob, Charlie) to sign in instantly.
+- Alternatively, you can type **any email address** and display name, and the app will generate a simulated Google ID token and log you in.
+- This allows you to open multiple browser sessions (e.g., normal window and incognito window) to log in as different users, add them to the same group, and test splitting expenses between them!
+
+### 2. Testing Offline Sync & Debt Simplification
+To test the offline-first sync engine:
+1. **Go Offline**: In your browser's Developer Tools, go to the **Network** tab and toggle the throttling dropdown from **No throttling** to **Offline** (or simply stop your local backend FastAPI server).
+2. **Make Changes**: Add a new group, create expenses, or settle debts. You will notice:
+   - A yellow banner indicating you are operating offline.
+   - A "Pending" badge next to any groups or expenses created while offline.
+   - All balances and simplified debts are recalculated **locally in real-time** using IndexedDB and the frontend balance engine.
+3. **Go Online**: Restore your network connection (or restart the FastAPI backend).
+4. **Synchronize**: Click the **Sync Now** button or let the app automatically sync. All pending local changes will be pushed to the server, and any changes from other users will be pulled and merged seamlessly.
