@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { Dashboard } from './components/Dashboard';
+import { clearLocalDatabase } from './db';
 
 interface UserProfile {
   id: string;
@@ -31,7 +32,15 @@ function App() {
     setInitializing(false);
 
     // Global interceptor listener for 401 unauthorized API responses
-    const handleUnauthorized = () => {
+    const handleUnauthorized = async () => {
+      localStorage.removeItem('splitw_token');
+      localStorage.removeItem('splitw_user');
+      localStorage.removeItem('splitw_last_sync_time');
+      try {
+        await clearLocalDatabase();
+      } catch (e) {
+        console.error('Failed to clear local database on unauthorized:', e);
+      }
       setCurrentUser(null);
       setToken(null);
     };

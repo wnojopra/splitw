@@ -52,3 +52,10 @@ export class SplitwDatabase extends Dexie {
 }
 
 export const db = new SplitwDatabase();
+
+export async function clearLocalDatabase(): Promise<void> {
+  await db.transaction('rw', db.groups, db.expenses, async () => {
+    await db.groups.clear();
+    await db.expenses.clear();
+  });
+}

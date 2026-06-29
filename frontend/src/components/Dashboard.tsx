@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { db, clearLocalDatabase } from '../db';
 import { syncAll } from '../services/sync';
 import { clearAuthToken } from '../services/api';
 import { WalletIcon, PlusIcon, CloudSyncIcon, LogoutIcon, UsersIcon } from './Icons';
@@ -65,10 +65,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onLogout }) =
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     if (confirm('Are you sure you want to sign out?')) {
       clearAuthToken();
       localStorage.removeItem('splitw_user');
+      localStorage.removeItem('splitw_last_sync_time');
+      try {
+        await clearLocalDatabase();
+      } catch (e) {
+        console.error('Failed to clear local database:', e);
+      }
       onLogout();
     }
   };
