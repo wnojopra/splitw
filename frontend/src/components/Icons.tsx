@@ -80,3 +80,11 @@ export const InfoIcon: React.FC<IconProps> = ({ size = 16, ...props }) => (
     <line x1="12" x2="12.01" y1="8" y2="8" />
   </svg>
 );
+
+export const EditIcon: React.FC<IconProps> = ({ size = 18, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
+

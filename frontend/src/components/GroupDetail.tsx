@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type LocalGroup } from '../db';
+import { db, type LocalGroup, type LocalExpense } from '../db';
 import { calculateLocalBalances } from '../services/balances';
 import { syncAll } from '../services/sync';
-import { PlusIcon, TrashIcon, UsersIcon, ArrowRightIcon, InfoIcon } from './Icons';
+import { PlusIcon, TrashIcon, UsersIcon, ArrowRightIcon, InfoIcon, EditIcon } from './Icons';
 import { ExpenseModal } from './ExpenseModal';
 
 interface GroupDetailProps {
@@ -22,6 +22,12 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
   // Expense Modal triggers
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [settlementPrefill, setSettlementPrefill] = useState<{ from_user_id: string; to_user_id: string; amount: string } | undefined>(undefined);
+  const [expenseToEdit, setExpenseToEdit] = useState<LocalExpense | undefined>(undefined);
+
+  const openEditExpense = (expense: LocalExpense) => {
+    setExpenseToEdit(expense);
+    setIsExpenseModalOpen(true);
+  };
 
   // Query expenses for this group using Dexie.js live tracker
   const expenses = useLiveQuery(
@@ -115,6 +121,7 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
   const closeExpenseModal = () => {
     setIsExpenseModalOpen(false);
     setSettlementPrefill(undefined);
+    setExpenseToEdit(undefined);
   };
 
   // Helper: Find display name of a member
@@ -208,6 +215,14 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
                           <span className="expense-payer-label">
                             {expense.is_settlement ? 'Settlement payment' : `${expense.splits.length} split participant(s)`}
                           </span>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.25rem', borderRadius: '6px', border: 'none', marginRight: '0.25rem' }}
+                            onClick={() => openEditExpense(expense)}
+                            title="Edit Expense"
+                          >
+                            <EditIcon size={14} />
+                          </button>
                           <button
                             className="btn btn-secondary"
                             style={{ padding: '0.25rem', borderRadius: '6px', border: 'none', color: 'var(--danger)' }}
@@ -361,6 +376,7 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
           group={group}
           currentUser={currentUser}
           prefilledSettlement={settlementPrefill}
+          expenseToEdit={expenseToEdit}
           onClose={closeExpenseModal}
           onExpenseCreated={() => {
             // Clear prefills and refresh local queries via Dexie hook triggers

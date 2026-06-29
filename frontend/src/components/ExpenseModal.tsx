@@ -6,6 +6,7 @@ interface ExpenseModalProps {
   group: LocalGroup;
   currentUser: { id: string; email: string; display_name: string };
   prefilledSettlement?: { from_user_id: string; to_user_id: string; amount: string };
+  expenseToEdit?: LocalExpense;
   onClose: () => void;
   onExpenseCreated: () => void;
 }
@@ -16,16 +17,44 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   group,
   currentUser,
   prefilledSettlement,
+  expenseToEdit,
   onClose,
   onExpenseCreated
 }) => {
-  // Form inputs state
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [payerId, setPayerId] = useState(currentUser.id);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isSettlement, setIsSettlement] = useState(false);
-  const [recipientId, setRecipientId] = useState(group.members.find(m => m.id !== currentUser.id)?.id || '');
+  // Form inputs state - initialized on mount
+  const [isSettlement, setIsSettlement] = useState(!!prefilledSettlement || expenseToEdit?.is_settlement || false);
+  
+  const [description, setDescription] = useState(() => {
+    if (prefilledSettlement) {
+      return `Settle debt to ${group.members.find(m => m.id === prefilledSettlement.to_user_id)?.display_name || 'Friend'}`;
+    }
+    return expenseToEdit?.description || '';
+  });
+
+  const [amount, setAmount] = useState(() => {
+    if (prefilledSettlement) return prefilledSettlement.amount;
+    return expenseToEdit?.amount || '';
+  });
+
+  const [payerId, setPayerId] = useState(() => {
+    if (prefilledSettlement) return prefilledSettlement.from_user_id;
+    return expenseToEdit?.paid_by_id || currentUser.id;
+  });
+
+  const [date, setDate] = useState(() => {
+    if (expenseToEdit?.date) {
+      return new Date(expenseToEdit.date).toISOString().split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+
+  const [recipientId, setRecipientId] = useState(() => {
+    if (prefilledSettlement) return prefilledSettlement.to_user_id;
+    if (expenseToEdit && expenseToEdit.is_settlement && expenseToEdit.splits[0]) {
+      return expenseToEdit.splits[0].user_id;
+    }
+    return group.members.find(m => m.id !== currentUser.id)?.id || '';
+  });
 
   // Splits state
   const [splitMode, setSplitMode] = useState<SplitMode>('equal');
@@ -35,26 +64,50 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Initialize participants map
+  // Initialize participants, unequal amounts, and detect split mode
   useEffect(() => {
     const initialParticipants: Record<string, boolean> = {};
     const initialUnequal: Record<string, string> = {};
+    
+    // Default: all members checked
     for (const member of group.members) {
       initialParticipants[member.id] = true;
       initialUnequal[member.id] = '';
     }
+
+    if (expenseToEdit && !expenseToEdit.is_settlement) {
+      const editSplits = expenseToEdit.splits || [];
+      const splitUserIds = new Set(editSplits.map(s => s.user_id));
+      
+      // Checked if in splits
+      for (const member of group.members) {
+        initialParticipants[member.id] = splitUserIds.has(member.id);
+      }
+
+      // Load amounts
+      for (const split of editSplits) {
+        initialUnequal[split.user_id] = split.owed_amount;
+      }
+
+      // Detect split mode
+      if (editSplits.length > 0) {
+        const total = parseFloat(expenseToEdit.amount) || 0;
+        const expectedShare = total / editSplits.length;
+        let isAllEqual = true;
+        for (const split of editSplits) {
+          const amt = parseFloat(split.owed_amount) || 0;
+          if (Math.abs(amt - expectedShare) > 0.015) {
+            isAllEqual = false;
+            break;
+          }
+        }
+        setSplitMode(isAllEqual ? 'equal' : 'unequal');
+      }
+    }
+
     setParticipants(initialParticipants);
     setUnequalAmounts(initialUnequal);
-
-    // If prefilled settlement from simplified debt balances
-    if (prefilledSettlement) {
-      setIsSettlement(true);
-      setPayerId(prefilledSettlement.from_user_id);
-      setRecipientId(prefilledSettlement.to_user_id);
-      setAmount(prefilledSettlement.amount);
-      setDescription(`Settle debt to ${group.members.find(m => m.id === prefilledSettlement.to_user_id)?.display_name || 'Friend'}`);
-    }
-  }, [group.members, prefilledSettlement]);
+  }, [group.members, expenseToEdit]);
 
   // Auto calculate equal shares or unequal totals
   const totalAmount = parseFloat(amount) || 0;
@@ -124,7 +177,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     setError(null);
 
     try {
-      const expenseId = crypto.randomUUID();
+      const expenseId = expenseToEdit ? expenseToEdit.id : crypto.randomUUID();
       let calculatedSplits: LocalExpenseSplit[] = [];
 
       if (isSettlement) {
