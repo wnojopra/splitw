@@ -218,6 +218,7 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
         existing_expense.is_deleted = expense_in.is_deleted
         existing_expense.description = expense_in.description
         existing_expense.amount = expense_in.amount
+        existing_expense.currency = expense_in.currency
         existing_expense.paid_by_id = paid_by_id
         existing_expense.date = expense_in.date
         existing_expense.is_settlement = expense_in.is_settlement

@@ -2,10 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { db, type LocalGroup, type LocalExpense, type LocalExpenseSplit } from '../db';
 import { syncAll } from '../services/sync';
 
+export const SUPPORTED_CURRENCIES = [
+  { code: 'EUR', symbol: '€', label: 'EUR (€)' },
+  { code: 'GBP', symbol: '£', label: 'GBP (£)' },
+  { code: 'USD', symbol: '$', label: 'USD ($)' }
+];
+
 interface ExpenseModalProps {
   group: LocalGroup;
   currentUser: { id: string; email: string; display_name: string };
-  prefilledSettlement?: { from_user_id: string; to_user_id: string; amount: string };
+  prefilledSettlement?: { from_user_id: string; to_user_id: string; amount: string; currency: string };
   expenseToEdit?: LocalExpense;
   onClose: () => void;
   onExpenseCreated: () => void;
@@ -23,6 +29,10 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 }) => {
   // Form inputs state - initialized on mount
   const [isSettlement, setIsSettlement] = useState(!!prefilledSettlement || expenseToEdit?.is_settlement || false);
+  const [currency, setCurrency] = useState(() => {
+    if (prefilledSettlement) return prefilledSettlement.currency;
+    return expenseToEdit?.currency || 'EUR';
+  });
   
   const [description, setDescription] = useState(() => {
     if (prefilledSettlement) {
@@ -113,6 +123,8 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   const totalAmount = parseFloat(amount) || 0;
   const checkedCount = Object.values(participants).filter(Boolean).length;
   
+  const currencySymbol = SUPPORTED_CURRENCIES.find(c => c.code === currency)?.symbol || '$';
+
   let allocationStatus = '';
   let isAllocationValid = true;
   let unequalSum = 0;
@@ -139,8 +151,8 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     } else if (Math.abs(diff) > 0.009) {
       isAllocationValid = false;
       allocationStatus = diff > 0 
-        ? `$${diff.toFixed(2)} left to allocate` 
-        : `$${Math.abs(diff).toFixed(2)} over-allocated!`;
+        ? `${currencySymbol}${diff.toFixed(2)} left to allocate` 
+        : `${currencySymbol}${Math.abs(diff).toFixed(2)} over-allocated!`;
     } else {
       isAllocationValid = true;
       allocationStatus = 'All amounts perfectly allocated!';
@@ -223,7 +235,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
         paid_by_id: payerId,
         description: description.trim(),
         amount: totalAmount.toFixed(2),
-        currency: 'USD',
+        currency: currency,
         date: new Date(date).toISOString(),
         is_settlement: isSettlement,
         splits: calculatedSplits,
@@ -274,8 +286,22 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
           </div>
 
           <div className="input-row">
-            <div className="form-group">
-              <label className="form-label">Amount ($)</label>
+            <div className="form-group" style={{ flex: '0 0 110px' }}>
+              <label className="form-label">Currency</label>
+              <select
+                className="input-field"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                disabled={saving}
+              >
+                {SUPPORTED_CURRENCIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ flex: '1' }}>
+              <label className="form-label">Amount</label>
               <input
                 type="number"
                 step="0.01"
@@ -289,7 +315,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ flex: '1.2' }}>
               <label className="form-label">Date</label>
               <input
                 type="date"
@@ -396,7 +422,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                         </label>
                         {participants[m.id] && (
                           <span className="split-input-pct" style={{ width: 'auto', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                            ${share}
+                            {currencySymbol}{share}
                           </span>
                         )}
                       </div>
@@ -409,7 +435,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                     <div key={m.id} className="split-row-item">
                       <span className="split-user-name">{m.id === currentUser.id ? 'You' : m.display_name}</span>
                       <div className="split-input-wrapper">
-                        <span className="split-input-prefix">$</span>
+                        <span className="split-input-prefix">{currencySymbol}</span>
                         <input
                           type="text"
                           className="input-field"
