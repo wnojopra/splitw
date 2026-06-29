@@ -52,6 +52,13 @@ def create_group(db: Session, group_in: schemas.GroupCreate, owner: models.User)
     # Ensure group ID is unique
     existing_group = get_group(db, group_id)
     if existing_group:
+        # SECURITY CHECK: Ensure the user updating the group is already a member
+        if owner not in existing_group.members:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to modify this group."
+            )
+            
         # Update existing group's name and description if they changed
         existing_group.name = group_in.name
         if group_in.description is not None:

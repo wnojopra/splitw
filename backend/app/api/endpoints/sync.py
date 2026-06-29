@@ -42,6 +42,11 @@ def sync_push(
                 print(f"SYNC_PUSH_DEBUG: Group {expense_in.group_id} not found in DB!")
                 continue
                 
+            # SECURITY CHECK: Ensure the syncing user is a member of the target group
+            if current_user not in db_group.members:
+                print(f"SYNC_PUSH_DEBUG: User {current_user.email} is not authorized to add expenses to group {db_group.id}!")
+                continue
+                
             crud.create_expense(db, group_id=expense_in.group_id, expense_in=expense_in, heal_membership=True)
             successful_expenses.append(expense_in.id)
         except Exception as e:

@@ -196,3 +196,64 @@ def test_sync_placeholder_and_healing(client, auth_headers1, test_user1, db):
     
     # Verify they are still in the group
     assert placeholder_user in group.members
+
+
+def test_sync_push_unauthorized_group_and_expense(client, auth_headers1, auth_headers2, test_user1, test_user2, db):
+    """
+    Tests that a user cannot push updates to a group they do not belong to,
+    nor add expenses to a group they do not belong to.
+    """
+    # 1. Create a group belonging ONLY to test_user1
+    from app.models import Group, Expense
+    group = Group(id="alice-private-group", name="Alice Private")
+    group.members.append(test_user1)
+    db.add(group)
+    db.commit()
+
+    # 2. test_user2 (auth_headers2) tries to push a group update and an expense to it
+    sync_payload = {
+        "groups": [
+            {
+                "id": group.id,
+                "name": "Hacked Group Name",
+                "description": "Charlie trying to modify",
+                "member_emails": [test_user1.email, test_user2.email]
+            }
+        ],
+        "expenses": [
+            {
+                "id": "hacked-expense-uuid",
+                "group_id": group.id,
+                "description": "Charlie's secret dinner",
+                "amount": 100.00,
+                "paid_by_id": test_user2.id,
+                "date": datetime.utcnow().isoformat(),
+                "splits": [
+                    {"user_id": test_user1.id, "owed_amount": 100.00}
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/sync/push",
+        json=sync_payload,
+        headers=auth_headers2
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+
+    # Both should have failed (not in the successful lists)
+    assert group.id not in data["successful_groups"]
+    assert "hacked-expense-uuid" not in data["successful_expenses"]
+
+    # Verify DB was NOT modified
+    db.refresh(group)
+    assert group.name == "Alice Private"  # Name remained unchanged
+    assert test_user2 not in group.members  # User2 was not added
+
+    # Verify no expense was created
+    expense = db.query(Expense).filter(Expense.id == "hacked-expense-uuid").first()
+    assert expense is None
+
