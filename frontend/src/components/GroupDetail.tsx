@@ -15,6 +15,7 @@ type ViewTab = 'expenses' | 'balances';
 
 export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) => {
   const [activeTab, setActiveTab] = useState<ViewTab>('expenses');
+  const [filterInvolved, setFilterInvolved] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
@@ -37,6 +38,11 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
 
   // Filter out deleted expenses for calculation and display
   const activeExpenses = (expenses || []).filter(e => e.is_deleted !== 1);
+
+  // Filter by involvement if enabled
+  const displayedExpenses = filterInvolved
+    ? activeExpenses.filter(e => e.paid_by_id === currentUser.id || e.splits.some(s => s.user_id === currentUser.id))
+    : activeExpenses;
 
   // Compute local balances and simplified debts instantly from active expenses
   const { balances, simplified_debts } = calculateLocalBalances(group, activeExpenses);
@@ -180,6 +186,20 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
           {/* Tabs Content */}
           {activeTab === 'expenses' ? (
             <div className="expenses-list">
+              {activeExpenses.length > 0 && (
+                <div className="filter-bar" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem', padding: '0 0.5rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: 'auto', margin: 0 }}
+                      checked={filterInvolved}
+                      onChange={(e) => setFilterInvolved(e.target.checked)}
+                    />
+                    Only show expenses I'm involved in
+                  </label>
+                </div>
+              )}
+
               {activeExpenses.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-state-icon">🧾</div>
@@ -189,8 +209,17 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
                     Add Expense Now
                   </button>
                 </div>
+              ) : displayedExpenses.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">🔍</div>
+                  <h3>No matching expenses</h3>
+                  <p>You are not involved in any expenses in this group.</p>
+                  <button className="btn btn-secondary" onClick={() => setFilterInvolved(false)}>
+                    Clear Filter
+                  </button>
+                </div>
               ) : (
-                activeExpenses
+                displayedExpenses
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map((expense) => (
                     <div key={expense.id} className="expense-item">
