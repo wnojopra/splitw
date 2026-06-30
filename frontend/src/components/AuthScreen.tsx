@@ -24,6 +24,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
   // Decodes JWT standard format without extra libraries
   const decodeToken = (token: string): any => {
     try {
@@ -163,64 +165,76 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
             <div id="google-signin-button"></div>
             
-            <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '1rem', margin: '0.5rem 0' }}>
-              <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>OR DEV SIGN IN</span>
-              <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
-            </div>
+            {isLocalhost && (
+              <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '1rem', margin: '0.5rem 0' }}>
+                <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>OR DEV SIGN IN</span>
+                <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
+              </div>
+            )}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left' }}>
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input
-              type="email"
-              className="input-field"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={loading}
-              required
-            />
-          </div>
+        {isLocalhost ? (
+          <>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left' }}>
+              <div className="form-group">
+                <label className="form-label">Email Address</label>
+                <input
+                  type="email"
+                  className="input-field"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                  required
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Display Name (Optional)</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="e.g. Jane Doe"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              disabled={loading}
-            />
-          </div>
+              <div className="form-group">
+                <label className="form-label">Display Name (Optional)</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="e.g. Jane Doe"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
 
-          <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
-            {loading ? 'Authenticating...' : 'Sign In / Register'}
-          </button>
-        </form>
+              <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
+                {loading ? 'Authenticating...' : 'Sign In / Register'}
+              </button>
+            </form>
 
-        <div style={{ margin: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>OR CHOOSE A DEMO ACCOUNT</span>
-          <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
-        </div>
+            <div style={{ margin: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>OR CHOOSE A DEMO ACCOUNT</span>
+              <div style={{ flexGrow: 1, height: '1px', background: 'var(--border)' }}></div>
+            </div>
 
-        <div className="demo-accounts-grid">
-          {DEMO_ACCOUNTS.map((account) => (
-            <button
-              key={account.email}
-              className="btn btn-secondary"
-              onClick={() => handleLogin(account.email, account.name)}
-              disabled={loading}
-              style={{ fontSize: '0.825rem', padding: '0.5rem 0.75rem' }}
-            >
-              {account.name.split(' ')[0]}
-            </button>
-          ))}
-        </div>
+            <div className="demo-accounts-grid">
+              {DEMO_ACCOUNTS.map((account) => (
+                <button
+                  key={account.email}
+                  className="btn btn-secondary"
+                  onClick={() => handleLogin(account.email, account.name)}
+                  disabled={loading}
+                  style={{ fontSize: '0.825rem', padding: '0.5rem 0.75rem' }}
+                >
+                  {account.name.split(' ')[0]}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          !import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+            <div style={{ padding: '1.5rem', background: 'var(--danger-light)', borderRadius: '8px', color: 'var(--danger)', fontSize: '0.85rem', textAlign: 'center', border: '1px solid var(--danger)' }}>
+              Google Sign-In is not configured. Please contact the administrator.
+            </div>
+          )
+        )}
       </div>
     </div>
   );
