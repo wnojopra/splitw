@@ -56,6 +56,7 @@ class ExpenseBase(BaseModel):
     currency: str = Field(default="USD", min_length=3, max_length=3)
     date: datetime
     is_settlement: bool = False
+    emoji: Optional[str] = None
 
 class ExpenseCreate(ExpenseBase):
     id: Optional[str] = None  # Client-provided UUID for offline sync support
@@ -72,6 +73,7 @@ class ExpenseUpdate(BaseModel):
     date: Optional[datetime] = None
     is_settlement: Optional[bool] = None
     splits: Optional[List[ExpenseSplitCreate]] = None
+    emoji: Optional[str] = None
 
 class ExpenseResponse(ExpenseBase):
     id: str

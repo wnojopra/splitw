@@ -207,7 +207,11 @@ To run `splitw` locally, you will need to start both the backend FastAPI server 
    ```bash
    pip install -r requirements.txt --index-url https://pypi.org/simple
    ```
-4. **Start the Server**:
+4. **Run Database Migrations**: Apply migrations to set up your local database:
+   ```bash
+   alembic upgrade head
+   ```
+5. **Start the Server**:
    ```bash
    uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
    ```
@@ -252,3 +256,27 @@ To test the offline-first sync engine:
    - All balances and simplified debts are recalculated **locally in real-time** using IndexedDB and the frontend balance engine.
 3. **Go Online**: Restore your network connection (or restart the FastAPI backend).
 4. **Synchronize**: Click the **Sync Now** button or let the app automatically sync. All pending local changes will be pushed to the server, and any changes from other users will be pulled and merged seamlessly.
+
+### 3. Working with Database Migrations (Alembic)
+Since database schema changes can be frequent during development, we use **Alembic** to manage database schema evolutions.
+
+#### How to create a new migration
+When you modify the database models in [models.py](file:///usr/local/google/home/willyn/repos/splitw/backend/app/models.py):
+1. Ensure your virtual environment is active and you are in the `backend` directory.
+2. Generate a new migration script automatically by comparing your models to the database:
+   ```bash
+   alembic revision --autogenerate -m "describe_your_changes_here"
+   ```
+3. Review the generated script in `backend/alembic/versions/` to ensure it looks correct.
+
+#### How to apply migrations locally
+To apply any new migrations to your local development database (`splitw.db`):
+```bash
+alembic upgrade head
+```
+
+#### How to roll back migrations
+To roll back the last applied migration:
+```bash
+alembic downgrade -1
+```

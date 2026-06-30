@@ -257,7 +257,7 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
                     <div key={expense.id} className="expense-item">
                       <div className="expense-item-left">
                         <div className={`expense-icon ${expense.is_settlement ? 'expense-icon-settlement' : ''}`}>
-                          {expense.is_settlement ? '🤝' : '🍔'}
+                          {expense.is_settlement ? '🤝' : (expense.emoji || '🍔')}
                         </div>
                         <div className="expense-details">
                           <span className="expense-desc">{expense.description}</span>

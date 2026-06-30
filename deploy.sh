@@ -92,10 +92,13 @@ deploy_backend() {
     log_info "3. Extracting package on VM..."
     gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --command="tar -xzf backend.tar.gz && rm backend.tar.gz"
     
-    log_info "4. Restarting backend service..."
+    log_info "4. Running database migrations on VM..."
+    gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --command="cd ~/backend && venv/bin/alembic upgrade head"
+    
+    log_info "5. Restarting backend service..."
     gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --command="sudo systemctl restart splitw-backend"
     
-    log_info "5. Cleaning up local tarball..."
+    log_info "6. Cleaning up local tarball..."
     rm -f backend.tar.gz
     
     log_success "Backend deployed successfully!"
