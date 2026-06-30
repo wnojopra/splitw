@@ -42,39 +42,32 @@ graph TD
 
 ## Redeployment Workflows
 
-Since the VM has limited resources (1GB RAM), **always build the frontend locally** on your development machine to prevent the VM from freezing during compilation.
+To simplify deployments and prevent the resource-constrained VM (1GB RAM) from freezing during frontend compilation, we use a local build-and-sync strategy. 
 
-Run these commands from the **root of your local repository**:
+An automated deployment script [deploy.sh](file:///usr/local/google/home/willyn/repos/splitw/deploy.sh) is provided in the root of the repository.
 
-### 1. Redeploy Frontend Only
-Use this command when you make UI changes, text edits, or frontend logic updates:
+### Using the Deployment Script
 
-```bash
-# 1. Rebuild the frontend locally using production env
-npm --prefix frontend run build && \
-# 2. Clean the old folder on the VM to prevent nested directory traps
-gcloud compute ssh splitw-vm --zone=us-central1-a --command="rm -rf ~/dist" && \
-# 3. Upload the new build to the VM
-gcloud compute scp --recurse frontend/dist splitw-vm:~ --zone=us-central1-a && \
-# 4. Ensure Nginx has permissions to read the new files
-gcloud compute ssh splitw-vm --zone=us-central1-a --command="chmod -R 755 ~/dist"
-```
-
-### 2. Redeploy Backend Only
-Use this command when you update backend APIs, schemas, or database logic:
+Run the script from the **root of your local repository**:
 
 ```bash
-# 1. Package the backend locally (excluding virtual envs, databases, and caches)
-tar -czf backend.tar.gz --exclude='venv' --exclude='__pycache__' --exclude='*.db' --exclude='jwt_secret.txt' --exclude='.pytest_cache' backend && \
-# 2. Upload the package to the VM
-gcloud compute scp backend.tar.gz splitw-vm:~ --zone=us-central1-a && \
-# 3. Extract the package on the VM, overwrite files, and clean up the tarball
-gcloud compute ssh splitw-vm --zone=us-central1-a --command="tar -xzf backend.tar.gz && rm backend.tar.gz" && \
-# 4. Restart the backend service to apply changes
-gcloud compute ssh splitw-vm --zone=us-central1-a --command="sudo systemctl restart splitw-backend" && \
-# 5. Clean up the local temporary tarball
-rm backend.tar.gz
+# Make the script executable (one-time setup)
+chmod +x deploy.sh
+
+# Deploy everything (Frontend + Backend)
+./deploy.sh
+
+# Deploy Frontend only (UI changes, styles, etc.)
+./deploy.sh frontend
+
+# Deploy Backend only (API updates, schemas, etc.)
+./deploy.sh backend
 ```
+
+### Under the Hood (What the script does)
+
+*   **Frontend Deployment**: Builds the React/Vite PWA locally (`npm run build`), clears the old `~/dist` directory on the VM, uploads the new build via `scp`, and ensures Nginx has read permissions (`chmod 755`).
+*   **Backend Deployment**: Packages the `backend` directory into a tarball (excluding virtual envs, databases, and caches), uploads it, extracts it on the VM (overwriting old files), and restarts the `splitw-backend` systemd service.
 
 ---
 
