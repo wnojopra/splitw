@@ -14,11 +14,14 @@ graph TD
     Nginx -- Serves Static Files --> Frontend[Frontend: React/Vite PWA]
     Nginx -- Proxies /api --> Backend[Backend: FastAPI]
     Backend -- Reads/Writes --> DB[(SQLite: splitw.db)]
+    Cron[Cron Job] -- Daily Backup Script --> DB
+    Cron -- Uploads --> GCS[(GCS: splitw-backups-nojo-client)]
 ```
 
 *   **Frontend**: React/Vite PWA, built locally on the developer machine (targeting the production API) and served as static assets by Nginx.
 *   **Backend**: FastAPI (Python 3), running locally on the VM on port `8000`, managed by `systemd`.
 *   **Database**: SQLite (`splitw.db`), stored persistently in the backend directory on the VM.
+*   **Backups**: Daily automated backups of `splitw.db` uploaded to a Google Cloud Storage (GCS) bucket with a 30-day retention policy.
 *   **Reverse Proxy & SSL**: Nginx, configured with an SSL certificate from **Let's Encrypt** (via Certbot) to handle HTTPS traffic on port 443 and automatically redirect all HTTP traffic (port 80) to HTTPS.
 *   **Domain**: `splitw.duckdns.org` (pointing to the VM's external IP).
 
@@ -163,3 +166,92 @@ You can run these commands from your **local machine** to check the status of th
     ```bash
     gcloud compute ssh splitw-vm --zone=us-central1-a --command="sudo systemctl restart nginx"
     ```
+
+---
+
+## Database Backups & Recovery
+
+To prevent data loss, we have implemented an automated daily backup system that copies the SQLite database to Google Cloud Storage (GCS).
+
+### 1. GCS Bucket Setup
+The backups are stored in a GCS bucket named `splitw-backups-nojo-client` in the `us-central1` region.
+
+To recreate the bucket or set it up initially:
+```bash
+# 1. Create the bucket
+gcloud storage buckets create gs://splitw-backups-nojo-client --location=us-central1 --project=nojo-client
+
+# 2. Set a lifecycle policy to automatically delete backups older than 30 days (to minimize costs)
+# Create a lifecycle.json file:
+# {
+#   "rule": [
+#     {
+#       "action": {"type": "Delete"},
+#       "condition": {"age": 30}
+#     }
+#   ]
+# }
+gcloud storage buckets update gs://splitw-backups-nojo-client --lifecycle-file=lifecycle.json
+```
+
+> [!IMPORTANT]
+> The VM's Service Account (or the default Compute Engine service account) must have the **Storage Object Creator** (or **Storage Admin**) role on this bucket to allow the backup script to upload files.
+
+### 2. Backup Script
+The backup script is located at [backup.sh](file:///usr/local/google/home/willyn/repos/splitw/backend/scripts/backup.sh) in the repository. It:
+1. Uses `sqlite3`'s `.backup` command to safely copy the database even if writes are occurring.
+2. Uploads the timestamped backup to `gs://splitw-backups-nojo-client/daily/`.
+3. Cleans up the temporary local backup file.
+
+When you redeploy the backend, this script is automatically uploaded to `/home/willyn/backend/scripts/backup.sh`.
+
+### 3. Automating with Cron
+To run the backup daily at 2:00 AM VM time:
+
+1. SSH into the VM:
+   ```bash
+   gcloud compute ssh splitw-vm --zone=us-central1-a
+   ```
+2. Make sure the script is executable:
+   ```bash
+   chmod +x /home/willyn/backend/scripts/backup.sh
+   ```
+3. Open the crontab editor:
+   ```bash
+   crontab -e
+   ```
+4. Add the following line at the bottom of the file:
+   ```cron
+   0 2 * * * /home/willyn/backend/scripts/backup.sh >> /home/willyn/backend/backups/backup.log 2>&1
+   ```
+5. Save and exit. The backup will now run daily, and logs will be written to `/home/willyn/backend/backups/backup.log`.
+
+### 4. How to Restore from a Backup
+If you need to restore the database to a previous state:
+
+1. SSH into the VM:
+   ```bash
+   gcloud compute ssh splitw-vm --zone=us-central1-a
+   ```
+2. Stop the backend service to prevent writes:
+   ```bash
+   sudo systemctl stop splitw-backend
+   ```
+3. Locate the backup you want to restore in GCS:
+   ```bash
+   gcloud storage ls gs://splitw-backups-nojo-client/daily/
+   ```
+4. Download the desired backup (replacing the placeholder with the actual filename):
+   ```bash
+   gcloud storage cp gs://splitw-backups-nojo-client/daily/splitw_backup_YYYYMMDD_HHMMSS.db /home/willyn/backend/splitw.db
+   ```
+5. Ensure correct permissions on the restored database:
+   ```bash
+   chown willyn:willyn /home/willyn/backend/splitw.db
+   chmod 644 /home/willyn/backend/splitw.db
+   ```
+6. Restart the backend service:
+   ```bash
+   sudo systemctl start splitw-backend
+   ```
+
