@@ -1,4 +1,5 @@
 import { type LocalGroup, type LocalExpense } from '../db';
+import { convertCurrency } from './currency';
 
 export interface DebtItem {
   from_user_id: string;
@@ -15,8 +16,14 @@ export interface GroupBalances {
 /**
  * Calculates net balances and simplified debts locally from IndexedDB group/expense data.
  * Ensures offline-first views are fully consistent with backend outputs.
+ * Supports converting all balances and debts to a single target currency if specified.
  */
-export function calculateLocalBalances(group: LocalGroup, expenses: LocalExpense[]): GroupBalances {
+export function calculateLocalBalances(
+  group: LocalGroup,
+  expenses: LocalExpense[],
+  targetCurrency?: string,
+  rates?: Record<string, number>
+): GroupBalances {
   // Initialize balances per currency
   const balancesByCurrency: Record<string, Record<string, number>> = {};
 
@@ -24,7 +31,10 @@ export function calculateLocalBalances(group: LocalGroup, expenses: LocalExpense
   const activeExpenses = expenses.filter(e => e.is_deleted !== 1);
 
   for (const expense of activeExpenses) {
-    const curr = expense.currency || 'USD';
+    const originalCurr = expense.currency || 'USD';
+    const useConversion = targetCurrency && targetCurrency !== 'default';
+    const curr = useConversion ? targetCurrency : originalCurr;
+
     if (!balancesByCurrency[curr]) {
       balancesByCurrency[curr] = {};
       for (const member of group.members) {
@@ -33,7 +43,11 @@ export function calculateLocalBalances(group: LocalGroup, expenses: LocalExpense
     }
 
     const payerId = expense.paid_by_id;
-    const amount = parseFloat(expense.amount);
+    let amount = parseFloat(expense.amount);
+
+    if (useConversion) {
+      amount = convertCurrency(amount, originalCurr, targetCurrency, rates);
+    }
 
     // Add to payer's balance
     if (payerId in balancesByCurrency[curr]) {
@@ -43,7 +57,12 @@ export function calculateLocalBalances(group: LocalGroup, expenses: LocalExpense
     // Subtract owed amounts for each participant in splits
     for (const split of expense.splits) {
       const debtorId = split.user_id;
-      const owed = parseFloat(split.owed_amount);
+      let owed = parseFloat(split.owed_amount);
+      
+      if (useConversion) {
+        owed = convertCurrency(owed, originalCurr, targetCurrency, rates);
+      }
+      
       if (debtorId in balancesByCurrency[curr]) {
         balancesByCurrency[curr][debtorId] -= owed;
       }
@@ -110,3 +129,4 @@ export function calculateLocalBalances(group: LocalGroup, expenses: LocalExpense
     simplified_debts
   };
 }
+

@@ -2,11 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, type LocalGroup, type LocalExpense, type LocalExpenseSplit } from '../db';
 import { syncAll } from '../services/sync';
 
-export const SUPPORTED_CURRENCIES = [
-  { code: 'EUR', symbol: '€', label: 'EUR (€)' },
-  { code: 'GBP', symbol: '£', label: 'GBP (£)' },
-  { code: 'USD', symbol: '$', label: 'USD ($)' }
-];
+import { SUPPORTED_CURRENCIES } from '../services/currency';
 
 interface ExpenseModalProps {
   group: LocalGroup;
