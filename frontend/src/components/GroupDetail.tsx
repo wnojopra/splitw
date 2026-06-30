@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type LocalGroup, type LocalExpense } from '../db';
 import { calculateLocalBalances } from '../services/balances';
 import { syncAll } from '../services/sync';
 import { PlusIcon, TrashIcon, UsersIcon, ArrowRightIcon, InfoIcon, EditIcon } from './Icons';
-import { ExpenseModal, SUPPORTED_CURRENCIES } from './ExpenseModal';
+import { ExpenseModal } from './ExpenseModal';
+import { SUPPORTED_CURRENCIES, fetchExchangeRates } from '../services/currency';
 
 interface GroupDetailProps {
   group: LocalGroup;
@@ -24,6 +25,17 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [settlementPrefill, setSettlementPrefill] = useState<{ from_user_id: string; to_user_id: string; amount: string; currency: string } | undefined>(undefined);
   const [expenseToEdit, setExpenseToEdit] = useState<LocalExpense | undefined>(undefined);
+
+  // Currency conversion state
+  const [displayCurrency, setDisplayCurrency] = useState<string>('default');
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+
+  // Fetch exchange rates on mount
+  useEffect(() => {
+    fetchExchangeRates().then(rates => {
+      setExchangeRates(rates);
+    });
+  }, []);
 
   const openEditExpense = (expense: LocalExpense) => {
     setExpenseToEdit(expense);
@@ -45,7 +57,7 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
     : activeExpenses;
 
   // Compute local balances and simplified debts instantly from active expenses
-  const { balances, simplified_debts } = calculateLocalBalances(group, activeExpenses);
+  const { balances, simplified_debts } = calculateLocalBalances(group, activeExpenses, displayCurrency, exchangeRates);
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,6 +288,27 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
           ) : (
             /* Balances and Settlements tab */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Currency Converter Dropdown */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(255, 255, 255, 0.01)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '70%' }}>
+                  Balances are calculated in their original currencies by default. Select a currency to convert and simplify all debts.
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Convert to:</span>
+                  <select
+                    value={displayCurrency}
+                    onChange={(e) => setDisplayCurrency(e.target.value)}
+                    className="input-field"
+                    style={{ width: 'auto', minWidth: '150px', padding: '0.35rem 2rem 0.35rem 0.75rem', fontSize: '0.8rem', margin: 0 }}
+                  >
+                    <option value="default">Default (Multi-currency)</option>
+                    {SUPPORTED_CURRENCIES.map(c => (
+                      <option key={c.code} value={c.code}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Net Balances Summary Cards */}
               <div className="card">
                 <h4 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
