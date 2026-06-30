@@ -59,6 +59,7 @@ class Expense(Base):
     date = Column(DateTime(timezone=True), nullable=False, index=True)
     is_settlement = Column(Boolean, default=False, nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)
+    emoji = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

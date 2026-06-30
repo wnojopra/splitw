@@ -40,6 +40,7 @@ export async function pushLocalChanges(): Promise<void> {
       date: e.date,
       is_settlement: e.is_settlement,
       is_deleted: e.is_deleted === 1,
+      emoji: e.emoji,
       splits: e.splits.map(s => ({
         user_id: s.user_id,
         owed_amount: s.owed_amount

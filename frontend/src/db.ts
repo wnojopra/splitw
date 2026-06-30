@@ -34,6 +34,7 @@ export interface LocalExpense {
   is_settlement: boolean;
   splits: LocalExpenseSplit[];
   is_deleted: number; // 0 for active, 1 for soft-deleted
+  emoji?: string;
   created_at: string;
   updated_at: string;
   syncState: 'synced' | 'pending';

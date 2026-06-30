@@ -71,6 +71,45 @@ chmod +x deploy.sh
 
 ---
 
+## 🗄️ Production Database Migrations
+
+We use **Alembic** to manage database schema changes. 
+
+### Automated Migrations on Deploy
+The [deploy.sh](file:///usr/local/google/home/willyn/repos/splitw/deploy.sh) script is configured to automatically run database migrations on the VM every time you deploy the backend. 
+During `./deploy.sh backend` (or `./deploy.sh all`):
+1. The new code and migration scripts are uploaded.
+2. The script runs `venv/bin/alembic upgrade head` on the VM to apply any pending migrations.
+3. The backend service is restarted.
+
+### ⚠️ One-Time Transition Step (Stamping)
+If you are deploying Alembic to an **existing production database** for the first time (where tables already exist but the database has no migration history), you **must** stamp the database first. 
+
+If you do not do this, the first deployment will fail because Alembic will try to run the `baseline` migration (creating tables) and fail because the tables already exist.
+
+To perform this transition safely without losing data:
+
+1. **Deploy the backend** (this uploads the Alembic files):
+   ```bash
+   ./deploy.sh backend
+   ```
+2. **Stamp the database** at the baseline revision (`79eaee45e12c`). Run this from your **local machine**:
+   ```bash
+   gcloud compute ssh splitw-vm --zone=us-central1-a --project=nojo-client --command="cd /home/willyn/backend && venv/bin/alembic stamp 79eaee45e12c"
+   ```
+3. **Apply the pending migrations**: This will apply only the new migrations (like adding the `emoji` column) without touching your existing tables. Run this from your **local machine**:
+   ```bash
+   gcloud compute ssh splitw-vm --zone=us-central1-a --project=nojo-client --command="cd /home/willyn/backend && venv/bin/alembic upgrade head"
+   ```
+4. **Restart the backend**:
+   ```bash
+   gcloud compute ssh splitw-vm --zone=us-central1-a --project=nojo-client --command="sudo systemctl restart splitw-backend"
+   ```
+
+Once this transition is complete, all future deployments will handle migrations automatically!
+
+---
+
 ## System Configurations (On the VM)
 
 For reference, here are the configurations active on the virtual machine.

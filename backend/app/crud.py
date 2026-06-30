@@ -225,6 +225,7 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
         existing_expense.paid_by_id = paid_by_id
         existing_expense.date = expense_in.date
         existing_expense.is_settlement = expense_in.is_settlement
+        existing_expense.emoji = expense_in.emoji
         existing_expense.updated_at = datetime.utcnow()
         # Clear and rewrite splits
         db.query(models.ExpenseSplit).filter(models.ExpenseSplit.expense_id == expense_id).delete()
@@ -248,7 +249,8 @@ def create_expense(db: Session, group_id: str, expense_in: schemas.ExpenseCreate
         currency=expense_in.currency,
         date=expense_in.date,
         is_settlement=expense_in.is_settlement,
-        is_deleted=expense_in.is_deleted
+        is_deleted=expense_in.is_deleted,
+        emoji=expense_in.emoji
     )
     db.add(db_expense)
     

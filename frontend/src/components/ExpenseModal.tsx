@@ -15,6 +15,8 @@ interface ExpenseModalProps {
 
 type SplitMode = 'equal' | 'unequal';
 
+const PRESET_EMOJIS = ['🍔', '🛒', '🏠', '🚗', '🛍️', '🎮', '🍿', '💡', '📦', '✈️', '🍺', '☕', '🍕', '🥗', '🏋️', '🏥', '🎒', '🔌'];
+
 export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   group,
   currentUser,
@@ -25,6 +27,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 }) => {
   // Form inputs state - initialized on mount
   const [isSettlement, setIsSettlement] = useState(!!prefilledSettlement || expenseToEdit?.is_settlement || false);
+  const [emoji, setEmoji] = useState(expenseToEdit?.emoji || '🍔');
   const [currency, setCurrency] = useState(() => {
     if (prefilledSettlement) return prefilledSettlement.currency;
     return expenseToEdit?.currency || group.default_currency || 'EUR';
@@ -234,6 +237,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
         currency: currency,
         date: new Date(date).toISOString(),
         is_settlement: isSettlement,
+        emoji: isSettlement ? '🤝' : emoji,
         splits: calculatedSplits,
         is_deleted: 0,
         created_at: new Date().toISOString(),
@@ -280,6 +284,38 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
               required
             />
           </div>
+
+          {!isSettlement && (
+            <div className="form-group">
+              <label className="form-label">Icon / Emoji</label>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem', padding: '0.25rem' }}>
+                {PRESET_EMOJIS.map(e => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => setEmoji(e)}
+                    style={{
+                      fontSize: '1.3rem',
+                      padding: '0.35rem',
+                      borderRadius: '8px',
+                      border: emoji === e ? '2px solid var(--accent)' : '1px solid var(--border)',
+                      background: emoji === e ? 'rgba(0, 123, 255, 0.1)' : 'transparent',
+                      cursor: 'pointer',
+                      width: '38px',
+                      height: '38px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title={`Select ${e}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="input-row">
             <div className="form-group" style={{ flex: '0 0 110px' }}>
