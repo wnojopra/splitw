@@ -109,6 +109,26 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
     }
   };
 
+  const handleUpdateDefaultCurrency = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCurrency = e.target.value;
+    try {
+      const updatedGroup = {
+        ...group,
+        default_currency: newCurrency,
+        updated_at: new Date().toISOString(),
+        syncState: 'pending' as const
+      };
+
+      // Write to IndexedDB
+      await db.groups.put(updatedGroup);
+      
+      // Sync instantly
+      syncAll();
+    } catch (err) {
+      console.error('Failed to update group default currency:', err);
+    }
+  };
+
   const handleDeleteExpense = async (expenseId: string) => {
     if (!confirm('Are you sure you want to delete this expense?')) return;
 
@@ -465,6 +485,27 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
                 </div>
               )}
             </form>
+          </div>
+
+          {/* Group Settings / Default Currency */}
+          <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+            <span className="form-label" style={{ fontSize: '0.7rem' }}>Group Settings</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <label htmlFor="group-default-currency" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                Default Expense Currency:
+              </label>
+              <select
+                id="group-default-currency"
+                className="input-field"
+                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', width: '100%', margin: 0 }}
+                value={group.default_currency || 'EUR'}
+                onChange={handleUpdateDefaultCurrency}
+              >
+                {SUPPORTED_CURRENCIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>

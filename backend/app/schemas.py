@@ -89,6 +89,7 @@ class ExpenseResponse(ExpenseBase):
 class GroupBase(BaseModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
     description: Optional[Annotated[str, StringConstraints(max_length=255)]] = None
+    default_currency: str = Field(default="EUR", min_length=3, max_length=3)
 
 class GroupCreate(GroupBase):
     id: Optional[str] = None  # Client-provided UUID for offline sync support
@@ -97,6 +98,7 @@ class GroupCreate(GroupBase):
 class GroupUpdate(BaseModel):
     name: Optional[Annotated[str, StringConstraints(min_length=1, max_length=100)]] = None
     description: Optional[Annotated[str, StringConstraints(max_length=255)]] = None
+    default_currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
 class GroupResponse(GroupBase):
     id: str

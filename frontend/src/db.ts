@@ -11,6 +11,7 @@ export interface LocalGroup {
   id: string;
   name: string;
   description?: string;
+  default_currency?: string;
   created_at: string;
   updated_at: string;
   members: LocalUser[];

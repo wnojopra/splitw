@@ -59,10 +59,12 @@ def create_group(db: Session, group_in: schemas.GroupCreate, owner: models.User)
                 detail="You do not have permission to modify this group."
             )
             
-        # Update existing group's name and description if they changed
+        # Update existing group's name, description, and default currency if they changed
         existing_group.name = group_in.name
         if group_in.description is not None:
             existing_group.description = group_in.description
+        if group_in.default_currency is not None:
+            existing_group.default_currency = group_in.default_currency
         
         # Add new members
         existing_member_emails = {m.email.lower() for m in existing_group.members}
@@ -88,7 +90,8 @@ def create_group(db: Session, group_in: schemas.GroupCreate, owner: models.User)
     db_group = models.Group(
         id=group_id,
         name=group_in.name,
-        description=group_in.description
+        description=group_in.description,
+        default_currency=group_in.default_currency
     )
     # Automatically add the owner as the first member
     db_group.members.append(owner)

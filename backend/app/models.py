@@ -39,6 +39,7 @@ class Group(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid_str)
     name = Column(String(255), nullable=False)
     description = Column(String(500), nullable=True)
+    default_currency = Column(String(10), default="EUR", nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

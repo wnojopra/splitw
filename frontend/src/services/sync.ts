@@ -27,6 +27,7 @@ export async function pushLocalChanges(): Promise<void> {
       id: g.id,
       name: g.name,
       description: g.description,
+      default_currency: g.default_currency || 'EUR',
       member_emails: g.members.map(m => m.email)
     })),
     expenses: pendingExpenses.map(e => ({

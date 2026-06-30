@@ -27,7 +27,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   const [isSettlement, setIsSettlement] = useState(!!prefilledSettlement || expenseToEdit?.is_settlement || false);
   const [currency, setCurrency] = useState(() => {
     if (prefilledSettlement) return prefilledSettlement.currency;
-    return expenseToEdit?.currency || 'EUR';
+    return expenseToEdit?.currency || group.default_currency || 'EUR';
   });
   
   const [description, setDescription] = useState(() => {
