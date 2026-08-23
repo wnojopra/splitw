@@ -18,28 +18,41 @@ export const GroupModal: React.FC<GroupModalProps> = ({ currentUser, onClose, on
 
   const handleAddEmail = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.preventDefault();
-    const trimmed = emailInput.trim().toLowerCase();
-    if (!trimmed) return;
+    const rawInput = emailInput.trim();
+    if (!rawInput) return;
 
-    // Validate email format basically
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError('Invalid email address format');
-      return;
+    // Split by commas, semicolons, whitespace, or newlines
+    const candidateEmails = rawInput
+      .split(/[\s,;]+/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+
+    const validNewEmails: string[] = [];
+    let errorMsg: string | null = null;
+
+    for (const email of candidateEmails) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errorMsg = `Invalid email format: ${email}`;
+        continue;
+      }
+      if (email === currentUser.email.toLowerCase()) {
+        continue;
+      }
+      if (emails.includes(email) || validNewEmails.includes(email)) {
+        continue;
+      }
+      validNewEmails.push(email);
     }
 
-    if (trimmed === currentUser.email.toLowerCase()) {
-      setError('You are automatically included in this group');
-      return;
+    if (validNewEmails.length > 0) {
+      setEmails([...emails, ...validNewEmails]);
+      setEmailInput('');
+      setError(errorMsg);
+    } else if (errorMsg) {
+      setError(errorMsg);
+    } else {
+      setError('Email(s) already added');
     }
-
-    if (emails.includes(trimmed)) {
-      setError('Email already added to invitations');
-      return;
-    }
-
-    setEmails([...emails, trimmed]);
-    setEmailInput('');
-    setError(null);
   };
 
   const handleRemoveEmail = (idxToRemove: number) => {
@@ -88,7 +101,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({ currentUser, onClose, on
       await db.groups.put(newGroup);
 
       // Trigger background synchronization to backend
-      syncAll();
+      await syncAll();
 
       onGroupCreated(groupId);
       onClose();
@@ -137,12 +150,12 @@ export const GroupModal: React.FC<GroupModalProps> = ({ currentUser, onClose, on
           </div>
 
           <div className="form-group">
-            <label className="form-label">Invite Group Members</label>
+            <label className="form-label">Invite Group Members (Optional)</label>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <input
-                type="email"
+                type="text"
                 className="input-field"
-                placeholder="friend@example.com"
+                placeholder="alice@a.com, bob@b.com"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -163,6 +176,9 @@ export const GroupModal: React.FC<GroupModalProps> = ({ currentUser, onClose, on
                 Add
               </button>
             </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Paste multiple emails separated by commas, or share an invite link after creating!
+            </span>
           </div>
 
           {/* Added emails display list */}

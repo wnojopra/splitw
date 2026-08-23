@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type LocalGroup, type LocalExpense } from '../db';
 import { calculateLocalBalances } from '../services/balances';
 import { syncAll } from '../services/sync';
-import { PlusIcon, TrashIcon, UsersIcon, ArrowRightIcon, InfoIcon, EditIcon } from './Icons';
+import { PlusIcon, TrashIcon, UsersIcon, ArrowRightIcon, InfoIcon, EditIcon, ShareIcon, CheckIcon } from './Icons';
 import { ExpenseModal } from './ExpenseModal';
 import { SUPPORTED_CURRENCIES, fetchExchangeRates } from '../services/currency';
+import { copyGroupInviteLink } from '../services/share';
 
 interface GroupDetailProps {
   group: LocalGroup;
@@ -20,6 +21,7 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
   const [inviteEmail, setInviteEmail] = useState('');
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
+  const [copiedInvite, setCopiedInvite] = useState(false);
 
   // Expense Modal triggers
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -42,6 +44,14 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
     setIsExpenseModalOpen(true);
   };
 
+  const handleCopyInviteLink = async () => {
+    const success = await copyGroupInviteLink(group.id);
+    if (success) {
+      setCopiedInvite(true);
+      setTimeout(() => setCopiedInvite(false), 2500);
+    }
+  };
+
   // Query expenses for this group using Dexie.js live tracker
   const expenses = useLiveQuery(
     () => db.expenses.where('group_id').equals(group.id).toArray(),
@@ -61,18 +71,40 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email) return;
+    const rawInput = inviteEmail.trim();
+    if (!rawInput) return;
 
-    // Simple regex validation
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setMemberError('Invalid email format');
-      return;
+    // Support comma, semicolon, space, or newline separated emails
+    const candidateEmails = rawInput
+      .split(/[\s,;]+/)
+      .map(email => email.trim().toLowerCase())
+      .filter(Boolean);
+
+    const existingEmails = new Set(group.members.map(m => m.email.toLowerCase()));
+    const validNewMembers: Array<{ id: string; email: string; display_name: string }> = [];
+    let hasInvalid = false;
+
+    for (const email of candidateEmails) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        hasInvalid = true;
+        continue;
+      }
+      if (existingEmails.has(email) || validNewMembers.some(m => m.email === email)) {
+        continue;
+      }
+      validNewMembers.push({
+        id: `dev-google-id-${email}`,
+        email,
+        display_name: email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1)
+      });
     }
 
-    // Check if already a member
-    if (group.members.some(m => m.email.toLowerCase() === email)) {
-      setMemberError('User is already in the group');
+    if (validNewMembers.length === 0) {
+      if (hasInvalid) {
+        setMemberError('Invalid email format');
+      } else {
+        setMemberError('User(s) already in the group');
+      }
       return;
     }
 
@@ -80,15 +112,9 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
     setMemberError(null);
 
     try {
-      const newMember = {
-        id: `dev-google-id-${email}`,
-        email,
-        display_name: email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1)
-      };
-
       const updatedGroup = {
         ...group,
-        members: [...group.members, newMember],
+        members: [...group.members, ...validNewMembers],
         updated_at: new Date().toISOString(),
         syncState: 'pending' as const
       };
@@ -100,7 +126,11 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
       syncAll();
 
       setInviteEmail('');
-      setMemberError('Member invited successfully!');
+      setMemberError(
+        validNewMembers.length === 1
+          ? 'Member invited successfully!'
+          : `Added ${validNewMembers.length} members successfully!`
+      );
       setTimeout(() => setMemberError(null), 3000);
     } catch (err: any) {
       setMemberError(err.message || 'Failed to invite member');
@@ -190,9 +220,29 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
             {group.description && <span className="view-subtitle">{group.description}</span>}
           </div>
 
-          <button className="btn btn-primary" onClick={() => setIsExpenseModalOpen(true)}>
-            <PlusIcon /> Add Expense
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={handleCopyInviteLink}
+              title="Copy group invite link to clipboard"
+              style={{ padding: '0.625rem 1rem', fontSize: '0.85rem' }}
+            >
+              {copiedInvite ? (
+                <>
+                  <CheckIcon size={16} style={{ color: 'var(--success)' }} />
+                  <span style={{ color: 'var(--success)' }}>Copied Link!</span>
+                </>
+              ) : (
+                <>
+                  <ShareIcon size={16} />
+                  <span>Copy Invite Link</span>
+                </>
+              )}
+            </button>
+            <button className="btn btn-primary" onClick={() => setIsExpenseModalOpen(true)}>
+              <PlusIcon /> Add Expense
+            </button>
+          </div>
         </div>
       </div>
 
@@ -453,25 +503,48 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
             ))}
           </div>
 
+          {/* Quick share button */}
+          <div style={{ marginTop: '1.25rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', fontSize: '0.8rem', padding: '0.5rem 0.75rem', gap: '0.375rem' }}
+              onClick={handleCopyInviteLink}
+            >
+              {copiedInvite ? (
+                <>
+                  <CheckIcon size={14} style={{ color: 'var(--success)' }} />
+                  <span style={{ color: 'var(--success)' }}>Invite Link Copied!</span>
+                </>
+              ) : (
+                <>
+                  <ShareIcon size={14} />
+                  <span>Copy Invite Link</span>
+                </>
+              )}
+            </button>
+          </div>
+
           {/* Invite form */}
-          <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
             <form onSubmit={handleAddMember} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <span className="form-label" style={{ fontSize: '0.7rem' }}>Invite New Member</span>
+              <span className="form-label" style={{ fontSize: '0.7rem' }}>Or Invite by Email</span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
-                  type="email"
+                  type="text"
                   className="input-field"
                   style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
-                  placeholder="friend@example.com"
+                  placeholder="alice@a.com, bob@b.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   disabled={isAddingMember}
                   required
                 />
                 <button type="submit" className="btn btn-secondary" style={{ padding: '0.5rem' }} disabled={isAddingMember}>
-                  Invite
+                  Add
                 </button>
               </div>
+              <span style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>Separate multiple emails with commas</span>
               {memberError && (
                 <div
                   style={{

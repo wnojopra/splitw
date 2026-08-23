@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, clearLocalDatabase } from '../db';
+import { db, clearLocalDatabase, type LocalGroup } from '../db';
 import { syncAll } from '../services/sync';
-import { clearAuthToken } from '../services/api';
+import { apiRequest, clearAuthToken } from '../services/api';
 import { WalletIcon, PlusIcon, CloudSyncIcon, LogoutIcon, UsersIcon } from './Icons';
 import { GroupModal } from './GroupModal';
 import { GroupDetail } from './GroupDetail';
@@ -23,6 +23,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onLogout }) =
   const [syncing, setSyncing] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [joinNotification, setJoinNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Query groups locally using Dexie useLiveQuery hook
   const groups = useLiveQuery(() => db.groups.toArray());
@@ -31,6 +32,56 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onLogout }) =
   const pendingGroupsCount = useLiveQuery(() => db.groups.where('syncState').equals('pending').count());
   const pendingExpensesCount = useLiveQuery(() => db.expenses.where('syncState').equals('pending').count());
   const hasPendingChanges = (pendingGroupsCount || 0) > 0 || (pendingExpensesCount || 0) > 0;
+
+  // Handle invitation join link on mount
+  useEffect(() => {
+    const handleJoinLink = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const joinId = params.get('join') || sessionStorage.getItem('splitw_pending_join');
+
+      if (!joinId) return;
+
+      // Clean up URL parameter and session storage
+      if (params.get('join')) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      sessionStorage.removeItem('splitw_pending_join');
+
+      try {
+        const joinedGroup = await apiRequest<LocalGroup>(`/${joinId}/join`, {
+          method: 'POST',
+        });
+
+        // Store into local IndexedDB
+        await db.groups.put({
+          ...joinedGroup,
+          syncState: 'synced',
+        });
+
+        // Trigger background sync to pull group expenses
+        syncAll();
+
+        // Switch to the newly joined group
+        setActiveGroupId(joinedGroup.id);
+        setJoinNotification({
+          message: `You've joined "${joinedGroup.name}"! 🎉`,
+          type: 'success',
+        });
+      } catch (err: any) {
+        console.error('Failed to join group via link:', err);
+        setJoinNotification({
+          message: err.message || 'Group invite link is invalid or group was not found.',
+          type: 'error',
+        });
+      }
+
+      // Auto-clear toast after 5s
+      const timer = setTimeout(() => setJoinNotification(null), 5000);
+      return () => clearTimeout(timer);
+    };
+
+    handleJoinLink();
+  }, [currentUser]);
 
   // Track online status in real-time
   useEffect(() => {
@@ -98,6 +149,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onLogout }) =
           <span>📝 You have local edits pending synchronization with the cloud server.</span>
           <button className="btn btn-secondary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.75rem', color: 'black', background: 'white' }} onClick={handleSync} disabled={syncing}>
             {syncing ? 'Syncing...' : 'Sync Now'}
+          </button>
+        </div>
+      )}
+
+      {/* Join Link Notification Banner */}
+      {joinNotification && (
+        <div
+          className="sync-banner"
+          style={{
+            background: joinNotification.type === 'success'
+              ? 'linear-gradient(135deg, var(--success) 0%, var(--success-hover) 100%)'
+              : 'linear-gradient(135deg, var(--danger) 0%, var(--danger-hover) 100%)'
+          }}
+        >
+          <span>{joinNotification.message}</span>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: 'black', background: 'white' }}
+            onClick={() => setJoinNotification(null)}
+          >
+            &times; Dismiss
           </button>
         </div>
       )}

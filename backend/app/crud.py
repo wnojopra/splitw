@@ -131,6 +131,14 @@ def add_group_member_by_email(db: Session, db_group: models.Group, email: str) -
     db.refresh(db_group)
     return member
 
+def join_group(db: Session, db_group: models.Group, user: models.User) -> models.Group:
+    if user not in db_group.members:
+        db_group.members.append(user)
+        db_group.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(db_group)
+    return db_group
+
 # --- Expense CRUD ---
 def get_expense(db: Session, expense_id: str) -> Optional[models.Expense]:
     return db.query(models.Expense).filter(models.Expense.id == expense_id, models.Expense.is_deleted == False).first()
