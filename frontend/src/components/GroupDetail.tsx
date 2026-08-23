@@ -171,7 +171,7 @@ export const GroupDetail: React.FC<GroupDetailProps> = ({ group, currentUser }) 
 
   // Helper: Get currency symbol
   const getCurrencySymbol = (code?: string) => {
-    return SUPPORTED_CURRENCIES.find(c => c.code === code)?.symbol || '€';
+    return SUPPORTED_CURRENCIES.find(c => c.code === code)?.symbol || code || '$';
   };
 
   return (

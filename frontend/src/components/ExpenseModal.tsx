@@ -122,7 +122,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   const totalAmount = parseFloat(amount) || 0;
   const checkedCount = Object.values(participants).filter(Boolean).length;
   
-  const currencySymbol = SUPPORTED_CURRENCIES.find(c => c.code === currency)?.symbol || '$';
+  const currencySymbol = SUPPORTED_CURRENCIES.find(c => c.code === currency)?.symbol || currency || '$';
 
   let allocationStatus = '';
   let isAllocationValid = true;

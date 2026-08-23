@@ -1,6 +1,10 @@
 export const SUPPORTED_CURRENCIES = [
+  { code: 'CAD', symbol: 'CA$', label: 'CAD (CA$)' },
   { code: 'EUR', symbol: '€', label: 'EUR (€)' },
   { code: 'GBP', symbol: '£', label: 'GBP (£)' },
+  { code: 'HKD', symbol: 'HK$', label: 'HKD (HK$)' },
+  { code: 'JPY', symbol: '¥', label: 'JPY (¥)' },
+  { code: 'MXN', symbol: 'Mex$', label: 'MXN (Mex$)' },
   { code: 'USD', symbol: '$', label: 'USD ($)' }
 ];
 
@@ -8,8 +12,12 @@ export const SUPPORTED_CURRENCIES = [
 // As of mid-2026 approximate rates
 export const FALLBACK_RATES: Record<string, number> = {
   USD: 1.0,
+  CAD: 1.36,
   EUR: 0.92,
-  GBP: 0.79
+  GBP: 0.79,
+  HKD: 7.80,
+  JPY: 155.0,
+  MXN: 18.50
 };
 
 const RATES_CACHE_KEY = 'splitw_exchange_rates';
@@ -36,7 +44,8 @@ export async function fetchExchangeRates(): Promise<Record<string, number>> {
       if (Date.now() - cachedTime < CACHE_DURATION) {
         const rates = JSON.parse(cachedRatesStr);
         // Ensure all supported currencies are present
-        if (rates.USD && rates.EUR && rates.GBP) {
+        const hasAllCurrencies = SUPPORTED_CURRENCIES.every(c => typeof rates[c.code] === 'number');
+        if (hasAllCurrencies) {
           return rates;
         }
       }
@@ -55,10 +64,11 @@ export async function fetchExchangeRates(): Promise<Record<string, number>> {
     const data = await response.json();
     if (data && data.result === 'success' && data.rates) {
       const rates: Record<string, number> = {
-        USD: 1.0,
-        EUR: data.rates.EUR || FALLBACK_RATES.EUR,
-        GBP: data.rates.GBP || FALLBACK_RATES.GBP
+        USD: 1.0
       };
+      for (const curr of SUPPORTED_CURRENCIES) {
+        rates[curr.code] = data.rates[curr.code] || FALLBACK_RATES[curr.code] || 1.0;
+      }
       
       // Save to cache
       localStorage.setItem(RATES_CACHE_KEY, JSON.stringify(rates));
@@ -74,7 +84,11 @@ export async function fetchExchangeRates(): Promise<Record<string, number>> {
   try {
     const cachedRatesStr = localStorage.getItem(RATES_CACHE_KEY);
     if (cachedRatesStr) {
-      return JSON.parse(cachedRatesStr);
+      const rates = JSON.parse(cachedRatesStr);
+      const hasAllCurrencies = SUPPORTED_CURRENCIES.every(c => typeof rates[c.code] === 'number');
+      if (hasAllCurrencies) {
+        return rates;
+      }
     }
   } catch (e) {}
 

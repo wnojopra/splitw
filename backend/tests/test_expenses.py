@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import status
 from app.models import Group, Expense
 
@@ -365,3 +365,48 @@ def test_update_expense_idempotent(client, auth_headers1, test_group, test_user1
     assert db_expense.emoji == "🥩"
     assert len(db_expense.splits) == 2
     assert float(db_expense.splits[0].owed_amount) == 40.00
+
+
+def test_get_group_balances_extended_currencies(client, auth_headers1, test_group, test_user1, test_user2):
+    """
+    Test balances and simplified debts with newly supported currencies:
+    MXN (Mexican Pesos), HKD (Hong Kong Dollars), JPY (Japanese Yen), CAD (Canadian Dollars).
+    """
+    currencies_and_amounts = [
+        ("MXN", 500.00, 250.00),
+        ("HKD", 800.00, 400.00),
+        ("JPY", 15000.00, 7500.00),
+        ("CAD", 120.00, 60.00),
+    ]
+
+    for curr, total, split in currencies_and_amounts:
+        res = client.post(
+            f"/api/v1/groups/{test_group.id}/expenses",
+            headers=auth_headers1,
+            json={
+                "description": f"Test {curr} Expense",
+                "amount": total,
+                "currency": curr,
+                "date": datetime.now(timezone.utc).isoformat(),
+                "paid_by_id": test_user1.id,
+                "splits": [
+                    {"user_id": test_user1.id, "owed_amount": split},
+                    {"user_id": test_user2.id, "owed_amount": split}
+                ]
+            }
+        )
+        assert res.status_code == status.HTTP_201_CREATED
+
+    response = client.get(f"/api/v1/groups/{test_group.id}/balances", headers=auth_headers1)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+
+    for curr, total, split in currencies_and_amounts:
+        assert float(data["balances"][curr][test_user1.id]) == split
+        assert float(data["balances"][curr][test_user2.id]) == -split
+        curr_debts = [d for d in data["simplified_debts"] if d["currency"] == curr]
+        assert len(curr_debts) == 1
+        assert curr_debts[0]["from_user_id"] == test_user2.id
+        assert curr_debts[0]["to_user_id"] == test_user1.id
+        assert float(curr_debts[0]["amount"]) == split
+
