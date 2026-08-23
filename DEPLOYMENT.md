@@ -34,7 +34,7 @@ graph TD
 *   **Zone**: `us-central1-a`
 *   **Machine Type**: `e2-micro` (Eligible for GCP's Always Free Tier)
 *   **Operating System**: Debian 12 (Bookworm)
-*   **External IP**: `34.45.201.52`
+*   **External IP**: `34.67.76.255`
 *   **Domain**: [https://splitw.duckdns.org](https://splitw.duckdns.org)
 *   **Firewall Tags**: `http-server` (port 80), `https-server` (port 443)
 

@@ -90,7 +90,7 @@ deploy_backend() {
     gcloud compute scp backend.tar.gz "$VM_NAME":~ --zone="$ZONE" --project="$PROJECT"
     
     log_info "3. Extracting package on VM..."
-    gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --command="tar -xzf backend.tar.gz && rm backend.tar.gz"
+    gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --command="tar -xzf backend.tar.gz && rm backend.tar.gz && chmod +x ~/backend/scripts/*.sh && mkdir -p ~/backend/backups"
     
     log_info "4. Running database migrations on VM..."
     gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --command="cd ~/backend && venv/bin/alembic upgrade head"

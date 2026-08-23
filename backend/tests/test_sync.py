@@ -4,7 +4,7 @@ from fastapi import status
 from app.models import Group, Expense
 from app.db import SessionLocal
 
-def test_sync_push_groups_and_expenses(client, auth_headers1, test_user1, test_user2):
+def test_sync_push_groups_and_expenses(client, auth_headers1, test_user1, test_user2, db):
     """
     Tests that a client can successfully push a new offline group and expense,
     and the server persists them using the client-provided UUIDs.
@@ -30,6 +30,7 @@ def test_sync_push_groups_and_expenses(client, auth_headers1, test_user1, test_u
                 "amount": 30.00,
                 "paid_by_id": test_user1.id,
                 "date": datetime.utcnow().isoformat(),
+                "emoji": "🪵",
                 "splits": [
                     {"user_id": test_user1.id, "owed_amount": 15.00},
                     {"user_id": test_user2.id, "owed_amount": 15.00}
@@ -49,6 +50,12 @@ def test_sync_push_groups_and_expenses(client, auth_headers1, test_user1, test_u
     
     assert group_uuid in data["successful_groups"]
     assert expense_uuid in data["successful_expenses"]
+    
+    # Verify expense and emoji were saved in DB
+    db.expire_all()
+    db_expense = db.query(Expense).filter(Expense.id == expense_uuid).first()
+    assert db_expense is not None
+    assert db_expense.emoji == "🪵"
 
 def test_sync_pull_updates(client, auth_headers1, test_user1, test_user2, db):
     """
@@ -66,7 +73,8 @@ def test_sync_pull_updates(client, auth_headers1, test_user1, test_user2, db):
         paid_by_id=test_user1.id,
         description="Gas",
         amount=20.00,
-        date=datetime.utcnow()
+        date=datetime.utcnow(),
+        emoji="🚗"
     )
     db.add(group)
     db.add(expense)
@@ -86,6 +94,7 @@ def test_sync_pull_updates(client, auth_headers1, test_user1, test_user2, db):
     assert len(data["expenses"]) == 1
     assert data["expenses"][0]["id"] == expense.id
     assert data["expenses"][0]["is_deleted"] is False
+    assert data["expenses"][0]["emoji"] == "🚗"
     
     # 3. Pull with a future timestamp (should return nothing)
     future_time = (datetime.utcnow() + timedelta(hours=1)).isoformat()

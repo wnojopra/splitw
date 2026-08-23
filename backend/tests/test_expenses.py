@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime
 from fastapi import status
-from app.models import Group
+from app.models import Group, Expense
 
 @pytest.fixture(scope="function")
 def test_group(db, test_user1, test_user2, test_user3) -> Group:
@@ -29,6 +29,7 @@ def test_create_expense_valid(client, auth_headers1, test_group, test_user1, tes
         "date": datetime.utcnow().isoformat(),
         "paid_by_id": test_user1.id,
         "is_settlement": False,
+        "emoji": "🍕",
         "splits": [
             {"user_id": test_user1.id, "owed_amount": 30.00},
             {"user_id": test_user2.id, "owed_amount": 30.00},
@@ -46,6 +47,7 @@ def test_create_expense_valid(client, auth_headers1, test_group, test_user1, tes
     data = response.json()
     assert data["description"] == "Cabin Rental"
     assert float(data["amount"]) == 90.00
+    assert data["emoji"] == "🍕"
     assert len(data["splits"]) == 3
 
 def test_create_expense_invalid_split_sum(client, auth_headers1, test_group, test_user1, test_user2, test_user3):
@@ -259,3 +261,107 @@ def test_get_group_balances_multi_currency(client, auth_headers1, test_group, te
     assert len(eur_debts) == 2
     assert float(next(d for d in eur_debts if d["from_user_id"] == test_user1.id)["amount"]) == 20.0
     assert float(next(d for d in eur_debts if d["from_user_id"] == test_user3.id)["amount"]) == 20.0
+
+
+def test_delete_expense(client, auth_headers1, test_group, test_user1, test_user2, db):
+    """
+    Tests soft-deleting an expense via the DELETE endpoint.
+    """
+    # 1. Create an expense
+    expense_data = {
+        "id": "expense-to-delete-uuid",
+        "description": "Short-lived Expense",
+        "amount": 20.00,
+        "currency": "USD",
+        "date": datetime.utcnow().isoformat(),
+        "paid_by_id": test_user1.id,
+        "is_settlement": False,
+        "splits": [
+            {"user_id": test_user1.id, "owed_amount": 10.00},
+            {"user_id": test_user2.id, "owed_amount": 10.00}
+        ]
+    }
+    create_response = client.post(
+        f"/api/v1/groups/{test_group.id}/expenses",
+        json=expense_data,
+        headers=auth_headers1
+    )
+    assert create_response.status_code == status.HTTP_201_CREATED
+    
+    # 2. Delete the expense
+    delete_response = client.delete(
+        f"/api/v1/expenses/{expense_data['id']}",
+        headers=auth_headers1
+    )
+    assert delete_response.status_code == status.HTTP_200_OK
+    
+    # 3. Verify it is soft-deleted in the DB
+    db_expense = db.query(Expense).filter(Expense.id == expense_data["id"]).first()
+    assert db_expense is not None
+    assert db_expense.is_deleted is True
+    
+    # 4. Verify it does not appear in the group expenses list
+    list_response = client.get(
+        f"/api/v1/groups/{test_group.id}/expenses",
+        headers=auth_headers1
+    )
+    assert list_response.status_code == status.HTTP_200_OK
+    expenses_list = list_response.json()
+    assert not any(e["id"] == expense_data["id"] for e in expenses_list)
+
+
+def test_update_expense_idempotent(client, auth_headers1, test_group, test_user1, test_user2, db):
+    """
+    Tests that posting an expense with an existing ID updates the expense (idempotency).
+    """
+    expense_id = "idempotent-expense-uuid"
+    
+    # 1. Create initial expense
+    expense_data = {
+        "id": expense_id,
+        "description": "Original Dinner",
+        "amount": 50.00,
+        "currency": "USD",
+        "date": datetime.utcnow().isoformat(),
+        "paid_by_id": test_user1.id,
+        "is_settlement": False,
+        "emoji": "🍔",
+        "splits": [
+            {"user_id": test_user1.id, "owed_amount": 25.00},
+            {"user_id": test_user2.id, "owed_amount": 25.00}
+        ]
+    }
+    response1 = client.post(
+        f"/api/v1/groups/{test_group.id}/expenses",
+        json=expense_data,
+        headers=auth_headers1
+    )
+    assert response1.status_code == status.HTTP_201_CREATED
+    
+    # 2. Post update to the same expense ID
+    updated_data = {
+        **expense_data,
+        "description": "Updated Dinner (Steak)",
+        "amount": 80.00,
+        "emoji": "🥩",
+        "splits": [
+            {"user_id": test_user1.id, "owed_amount": 40.00},
+            {"user_id": test_user2.id, "owed_amount": 40.00}
+        ]
+    }
+    response2 = client.post(
+        f"/api/v1/groups/{test_group.id}/expenses",
+        json=updated_data,
+        headers=auth_headers1
+    )
+    assert response2.status_code == status.HTTP_201_CREATED
+    
+    # 3. Verify in DB
+    db.expire_all()
+    db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    assert db_expense is not None
+    assert db_expense.description == "Updated Dinner (Steak)"
+    assert float(db_expense.amount) == 80.00
+    assert db_expense.emoji == "🥩"
+    assert len(db_expense.splits) == 2
+    assert float(db_expense.splits[0].owed_amount) == 40.00
