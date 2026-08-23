@@ -48,7 +48,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onLogout }) =
       sessionStorage.removeItem('splitw_pending_join');
 
       try {
-        const joinedGroup = await apiRequest<LocalGroup>(`/groups/${joinId}/join`, {
+        const joinedGroup = await apiRequest<LocalGroup>(`/${joinId}/join`, {
           method: 'POST',
         });
 

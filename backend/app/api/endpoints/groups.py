@@ -78,7 +78,6 @@ def add_group_member(
     return crud.add_group_member_by_email(db, db_group=db_group, email=email)
 
 @router.post("/{group_id}/join", response_model=schemas.GroupResponse)
-@router.post("/groups/{group_id}/join", response_model=schemas.GroupResponse)
 def join_group(
     group_id: str,
     current_user: User = Depends(get_current_user),
