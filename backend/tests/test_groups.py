@@ -84,3 +84,71 @@ def test_invite_group_member(client, auth_headers1, test_user1, test_user2, db):
     # Verify DB membership
     db.refresh(group)
     assert test_user2 in group.members
+
+def test_join_group_success(client, auth_headers2, test_user1, test_user2, db):
+    """
+    Tests that a user can join a group via the join endpoint.
+    """
+    # User 1 creates group
+    group = Group(id="group-uuid-join-test", name="Camping Trip")
+    group.members.append(test_user1)
+    db.add(group)
+    db.commit()
+
+    # User 2 joins the group via POST /{group_id}/join
+    response = client.post(
+        f"/api/v1/{group.id}/join",
+        headers=auth_headers2
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["id"] == group.id
+    member_emails = [m["email"] for m in data["members"]]
+    assert test_user1.email in member_emails
+    assert test_user2.email in member_emails
+
+    # Verify DB state
+    db.refresh(group)
+    assert test_user2 in group.members
+
+def test_join_group_idempotent(client, auth_headers1, test_user1, db):
+    """
+    Tests that joining a group you are already in is idempotent and succeeds without duplicates.
+    """
+    group = Group(id="group-uuid-idempotent", name="Coffee Club")
+    group.members.append(test_user1)
+    db.add(group)
+    db.commit()
+
+    response = client.post(
+        f"/api/v1/{group.id}/join",
+        headers=auth_headers1
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data["members"]) == 1
+    assert data["members"][0]["email"] == test_user1.email
+
+def test_join_group_not_found(client, auth_headers1):
+    """
+    Tests that joining a non-existent group returns 404.
+    """
+    response = client.post(
+        "/api/v1/non-existent-group-uuid/join",
+        headers=auth_headers1
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["detail"] == "Group not found"
+
+def test_join_group_unauthorized(client, test_user1, db):
+    """
+    Tests that joining without an auth token returns 401.
+    """
+    group = Group(id="group-uuid-unauth", name="Private Group")
+    group.members.append(test_user1)
+    db.add(group)
+    db.commit()
+
+    response = client.post(f"/api/v1/{group.id}/join")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+

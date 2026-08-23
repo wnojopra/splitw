@@ -14,8 +14,14 @@ function App() {
   const [token, setToken] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
 
-  // Check persistence login on startup
+  // Check persistence login and URL join param on startup
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinId = params.get('join');
+    if (joinId) {
+      sessionStorage.setItem('splitw_pending_join', joinId);
+    }
+
     const savedToken = localStorage.getItem('splitw_token');
     const savedUser = localStorage.getItem('splitw_user');
 

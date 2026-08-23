@@ -23,8 +23,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasPendingInvite, setHasPendingInvite] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  // Check if user landed with a group invite link
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinId = params.get('join');
+    if (joinId) {
+      sessionStorage.setItem('splitw_pending_join', joinId);
+      setHasPendingInvite(true);
+    } else if (sessionStorage.getItem('splitw_pending_join')) {
+      setHasPendingInvite(true);
+    }
+  }, []);
 
   // Decodes JWT standard format without extra libraries
   const decodeToken = (token: string): any => {
@@ -158,6 +171,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
           <p>Expense Sharing for my friends</p>
           <p>By Willy Nojopranoto</p>
         </div>
+
+        {hasPendingInvite && (
+          <div style={{
+            padding: '0.85rem 1rem',
+            background: 'var(--primary-light)',
+            border: '1px solid var(--primary)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '0.85rem',
+            color: 'var(--text-primary)',
+            textAlign: 'center',
+            lineHeight: 1.4
+          }}>
+            🎉 <strong>You have a group invitation!</strong>
+            <div style={{ fontSize: '0.775rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+              Sign in or pick a demo account below to join the group.
+            </div>
+          </div>
+        )}
 
         {error && <div className="split-row-error" style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--danger-light)', borderRadius: '8px', marginBottom: '1rem' }}>{error}</div>}
 

@@ -76,3 +76,19 @@ def add_group_member(
         )
         
     return crud.add_group_member_by_email(db, db_group=db_group, email=email)
+
+@router.post("/{group_id}/join", response_model=schemas.GroupResponse)
+@router.post("/groups/{group_id}/join", response_model=schemas.GroupResponse)
+def join_group(
+    group_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Allows the authenticated user to join a group using its shareable link/ID.
+    """
+    db_group = crud.get_group(db, group_id=group_id)
+    if not db_group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        
+    return crud.join_group(db, db_group=db_group, user=current_user)
